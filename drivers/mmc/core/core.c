@@ -145,17 +145,24 @@ mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
 	struct scatterlist *sg;
 #endif
 
+	if( host->index == 1 )
+	{
 	pr_debug("%s: starting CMD%u arg %08x flags %08x\n",
 		 mmc_hostname(host), mrq->cmd->opcode,
 		 mrq->cmd->arg, mrq->cmd->flags);
+		}
 
-	if (mrq->data) {
+	
+	if (mrq->data ) {
+		if( host->index == 1 )
+		{
 		pr_debug("%s:     blksz %d blocks %d flags %08x "
 			"tsac %d ms nsac %d\n",
 			mmc_hostname(host), mrq->data->blksz,
 			mrq->data->blocks, mrq->data->flags,
 			mrq->data->timeout_ns / 1000000,
 			mrq->data->timeout_clks);
+		}
 	}
 
 	if (mrq->stop) {
@@ -996,11 +1003,17 @@ int mmc_resume_bus(struct mmc_host *host)
 		mmc_power_up(host);
 		BUG_ON(!host->bus_ops->resume);
 		host->bus_ops->resume(host);
+#if defined CONFIG_MACH_BOSE_ATT
+		if(host->bus_ops->detect)
+			host->bus_ops->detect(host);
+	}
+
+#else		
 	}
 
 	if (host->bus_ops->detect && !host->bus_dead)
 		host->bus_ops->detect(host);
-
+#endif
 	mmc_bus_put(host);
 	printk("%s: Deferred resume completed\n", mmc_hostname(host));
 	return 0;
@@ -1480,6 +1493,9 @@ void mmc_rescan(struct work_struct *work)
 
 	if (host->rescan_disable) {
 		spin_unlock_irqrestore(&host->lock, flags);
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+		wake_unlock(&mmc_delayed_work_wake_lock);
+#endif
 		return;
 	}
 
@@ -1832,11 +1848,17 @@ int mmc_pm_notify(struct notifier_block *notify_block,
 	case PM_POST_RESTORE:
 
 		spin_lock_irqsave(&host->lock, flags);
+
+#if defined CONFIG_MACH_BOSE_ATT
+		host->rescan_disable = 0;
+#endif		
 		if (mmc_bus_manual_resume(host)) {
 			spin_unlock_irqrestore(&host->lock, flags);
 			break;
 		}
+#if !defined CONFIG_MACH_BOSE_ATT
 		host->rescan_disable = 0;
+#endif
 		spin_unlock_irqrestore(&host->lock, flags);
 #ifdef CONFIG_MACH_N1
 		if(!host->card || host->card->type != MMC_TYPE_SDIO)

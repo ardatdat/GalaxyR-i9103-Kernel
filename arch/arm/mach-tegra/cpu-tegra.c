@@ -30,6 +30,7 @@
 #include <linux/io.h>
 #include <linux/suspend.h>
 #include <linux/debugfs.h>
+#include <linux/reboot.h>
 
 #include <asm/smp_twd.h>
 #include <asm/system.h>
@@ -49,6 +50,8 @@ static struct clk *emc_clk;
 static unsigned long target_cpu_speed[NUM_CPUS];
 static DEFINE_MUTEX(tegra_cpu_lock);
 static bool is_suspended;
+static int suspend_index;
+static int wakeup_index;
 
 unsigned int tegra_getspeed(unsigned int cpu);
 static int tegra_update_cpu_speed(unsigned long rate);
@@ -428,10 +431,13 @@ static int tegra_pm_notify(struct notifier_block *nb, unsigned long event,
 	if (event == PM_SUSPEND_PREPARE) {
 		is_suspended = true;
 		pr_info("Tegra cpufreq suspend: setting frequency to %d kHz\n",
-			freq_table[0].frequency);
-		tegra_update_cpu_speed(freq_table[0].frequency);
+			freq_table[suspend_index].frequency);
+		tegra_update_cpu_speed(freq_table[suspend_index].frequency);
 	} else if (event == PM_POST_SUSPEND) {
 		is_suspended = false;
+		tegra_update_cpu_speed(freq_table[wakeup_index].frequency);
+		pr_info("Tegra cpufreq resume: restoring frequency to %d kHz\n",
+			freq_table[wakeup_index].frequency);
 	}
 	mutex_unlock(&tegra_cpu_lock);
 
@@ -440,6 +446,21 @@ static int tegra_pm_notify(struct notifier_block *nb, unsigned long event,
 
 static struct notifier_block tegra_cpu_pm_notifier = {
 	.notifier_call = tegra_pm_notify,
+};
+
+static int tegra_cpu_notifier_call(struct notifier_block *this,
+					unsigned long code, void *_cmd)
+{
+	pr_info("%s\n", __func__);
+	mutex_lock(&tegra_cpu_lock);
+	is_suspended = true;
+	mutex_unlock(&tegra_cpu_lock);
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block tegra_cpu_reboot_notifier = {
+	.notifier_call = tegra_cpu_notifier_call,
 };
 
 static int tegra_cpu_init(struct cpufreq_policy *policy)
@@ -471,6 +492,7 @@ static int tegra_cpu_init(struct cpufreq_policy *policy)
 
 	if (policy->cpu == 0) {
 		register_pm_notifier(&tegra_cpu_pm_notifier);
+		register_reboot_notifier(&tegra_cpu_reboot_notifier);
 	}
 
 	return 0;
@@ -508,6 +530,9 @@ static int __init tegra_cpufreq_init(void)
 	struct tegra_cpufreq_table_data *table_data =
 		tegra_cpufreq_table_get();
 	BUG_ON(!table_data);
+
+	suspend_index = table_data->suspend_index;
+	wakeup_index = table_data->wakeup_index;
 
 #ifdef CONFIG_TEGRA_THERMAL_THROTTLE
 	/*

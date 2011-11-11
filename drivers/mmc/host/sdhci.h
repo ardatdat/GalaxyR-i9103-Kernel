@@ -285,6 +285,9 @@ struct sdhci_host {
 
 	spinlock_t		lock;		/* Mutex */
 
+#if defined CONFIG_MACH_BOSE_ATT		
+	unsigned long 		spinlock_flags;
+#endif
 	int			flags;		/* Host attributes */
 #define SDHCI_USE_SDMA		(1<<0)		/* Host is SDMA capable */
 #define SDHCI_USE_ADMA		(1<<1)		/* Host is ADMA capable */
@@ -343,6 +346,9 @@ struct sdhci_ops {
 	unsigned int	(*get_max_clock)(struct sdhci_host *host);
 	unsigned int	(*get_min_clock)(struct sdhci_host *host);
 	unsigned int	(*get_timeout_clock)(struct sdhci_host *host);
+#if defined CONFIG_MACH_BOSE_ATT	
+	int			(*card_detect)(struct sdhci_host *host);
+#endif
 };
 
 #ifdef CONFIG_MMC_SDHCI_IO_ACCESSORS

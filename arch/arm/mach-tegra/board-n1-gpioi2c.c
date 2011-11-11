@@ -394,6 +394,29 @@ static int max17043_low_batt_cb(void)
 	return psy->set_property(psy, POWER_SUPPLY_PROP_CAPACITY_LEVEL, &value);
 }
 
+#if defined(CONFIG_MACH_N1_CHN)
+unsigned int sec_bat_get_lpcharging_state_check(void)
+{
+	struct power_supply *psp = power_supply_get_by_name("max8907c-charger");
+	union power_supply_propval val;
+
+	//BUG_ON(!psp);
+
+	//pr_info("%s: LP charging:%d\n", __func__, val);
+	//return val;
+
+	if (!psp) {
+		pr_err("%s: fail to get charger ps\n", __func__);
+		return -ENODEV;
+		}
+		
+	psp->get_property(psp, POWER_SUPPLY_PROP_STATUS, &val);
+		
+	return val.intval;
+}
+EXPORT_SYMBOL(sec_bat_get_lpcharging_state_check);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
+
 /*	2011.03.09 1650mAh SDI from MAXIM
  * 	Test Condition
  *	Cell : MV504657M, 1650mAh

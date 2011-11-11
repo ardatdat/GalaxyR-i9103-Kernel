@@ -38,8 +38,8 @@
 #define T8_DRIFTST                1 
 #define T8_TCHAUTOCAL             0
 #define T8_SYNC                   0
-#define T8_ATCHCALST			50
-#define T8_ATCHCALSTHR			1
+#define T8_ATCHCALST			3
+#define T8_ATCHCALSTHR			20
 #define T8_ATCHFRCCALTHR		127		/* V2.0 added */
 #define T8_ATCHFRCCALRATIO		127		/* V2.0 added */
 
@@ -276,7 +276,7 @@
 
 /* for BATTERY */
 #define	T48_CTRL			3
-#define	T48_CFG				4  
+#define	T48_CFG				0x84
 #define	T48_CALCFG                0x40
 #define	T48_BASEFREQ              0 
 #define	T48_RESERVED0             0  

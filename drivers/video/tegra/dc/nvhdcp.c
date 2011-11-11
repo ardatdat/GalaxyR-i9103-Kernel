@@ -28,6 +28,9 @@
 #include <linux/wakelock.h>
 #endif
 
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
+
 #include <mach/dc.h>
 #include <mach/nvhost.h>
 #include <mach/kfuse.h>
@@ -38,6 +41,12 @@
 #include "dc_priv.h"
 #include "hdmi_reg.h"
 #include "hdmi.h"
+
+/* To use hrtimer */
+#define	MS_TO_NS(x)	(x * 1000000)
+
+static struct hrtimer hr_five_s_timer;
+static bool five_s_expired;
 
 /* for 0x40 Bcaps */
 #define BCAPS_REPEATER (1 << 6)
@@ -107,6 +116,9 @@ struct tegra_nvhdcp {
 	int				fail_count;
 };
 
+enum hrtimer_restart hrtimer_five_s_callback(struct hrtimer *timer);
+void start_hrtimer_five_s(void);
+
 static inline bool nvhdcp_is_plugged(struct tegra_nvhdcp *nvhdcp)
 {
 	rmb();
@@ -120,10 +132,14 @@ static inline bool nvhdcp_set_plugged(struct tegra_nvhdcp *nvhdcp, bool plugged)
 	return plugged;
 }
 
+static struct clk *cpu_clk; 
+static spinlock_t temp_lock = SPIN_LOCK_UNLOCKED;
+
 static int nvhdcp_i2c_read(struct tegra_nvhdcp *nvhdcp, u8 reg,
 					size_t len, void *data)
 {
 	int status;
+
 	int retries = 15;
 	struct i2c_msg msg[] = {
 		{
@@ -773,6 +789,7 @@ static int get_repeater_info(struct tegra_nvhdcp *nvhdcp)
 
 	/* wait up to 5 seconds for READY on repeater */
 	retries = 51;
+	start_hrtimer_five_s();
 	do {
 		if (!nvhdcp_is_plugged(nvhdcp)) {
 			nvhdcp_err("disconnect while waiting for repeater\n");
@@ -786,6 +803,11 @@ static int get_repeater_info(struct tegra_nvhdcp *nvhdcp)
 		}
 		if (retries > 1)
 			msleep(100);
+		printk(KERN_ERR "[HDCP] Repeater retries = %d\n", retries);
+		if (five_s_expired) {
+			retries = 0;
+			break;
+		}
 	} while (--retries);
 	if (!retries) {
 		nvhdcp_err("repeater Bcaps read timeout\n");
@@ -1266,6 +1288,10 @@ struct tegra_nvhdcp *tegra_nvhdcp_create(struct tegra_dc_hdmi_data *hdmi,
 
 	nvhdcp_vdbg("%s(): created misc device %s\n", __func__, nvhdcp->name);
 
+	hrtimer_init(&hr_five_s_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	hr_five_s_timer.function = &hrtimer_five_s_callback;
+	five_s_expired = false;
+
 	return nvhdcp;
 free_workqueue:
 	destroy_workqueue(nvhdcp->downstream_wq);
@@ -1277,6 +1303,22 @@ free_nvhdcp:
 	kfree(nvhdcp);
 	nvhdcp_err("unable to create device.\n");
 	return ERR_PTR(e);
+}
+
+enum hrtimer_restart hrtimer_five_s_callback(struct hrtimer *timer)
+{
+	five_s_expired = true;
+//	hrtimer_cancel(&hr_wake_timer);
+	return HRTIMER_NORESTART;
+}
+
+void start_hrtimer_five_s(void)
+{
+	hrtimer_cancel(&hr_five_s_timer);
+	ktime_t ktime;
+	ktime = ktime_set(5, 0);
+	five_s_expired = false;
+	hrtimer_start(&hr_five_s_timer, ktime, HRTIMER_MODE_REL);
 }
 
 void tegra_nvhdcp_destroy(struct tegra_nvhdcp *nvhdcp)

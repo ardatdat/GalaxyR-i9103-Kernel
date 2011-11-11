@@ -165,22 +165,25 @@ static void hall_int_func(struct work_struct *work)
 {
 	int check_hall_ic_state = 0;
 	int check_count = 0;
+
+    #define COUNT_MAX	3
+    #define DEBOUNCE	10
 	
 #if HALL_DEBUG
-	printk("Capture GPIO state and report event!!!\n");
+//	printk("Capture GPIO state and report event!!!\n");
 #endif
 	cur_val = gpio_get_value(GPIO_HALL_INT);
 
 	// check Hall IC state 3 times for 300ms to confirm the state is correct
-	for(check_count = 0; check_count <3; check_count++)
+	for(check_count = 0; check_count <COUNT_MAX; check_count++)
 	{
-		msleep(100);
+		//msleep(50);
 		//mdelay(100);
 		
 		check_hall_ic_state = gpio_get_value(GPIO_HALL_INT);
 
 		if(cur_val == check_hall_ic_state){
-			printk("HALL GPIO state is changed. cur_val = %d, check_hall_ic_state = %d\n",cur_val,check_hall_ic_state);
+//			printk("HALL GPIO state is changed. cur_val = %d, check_hall_ic_state = %d\n",cur_val,check_hall_ic_state);
 			continue;
 		}else{
 			return;
@@ -194,8 +197,6 @@ static void hall_int_func(struct work_struct *work)
 
 	if(cur_val != prev_val)
 	{	
-		printk("HALL GPIO state is changed. prev_val %d cur_val %d\n",prev_val,cur_val);
-		
 #if 0 // BL controlled by framework	
 		if (cur_val==1)
 		{
@@ -209,6 +210,8 @@ static void hall_int_func(struct work_struct *work)
 		}
 #endif		
 		input_report_switch(hall_int_data->input_dev,SW_LID,cur_val);
+
+		printk("[HALL] GPIO state is changed. input_report_switch.. prev_val %d cur_val %d\n",prev_val,cur_val);
 
 		if(cur_val == 0)
 			current_hall_ic_state = 1;

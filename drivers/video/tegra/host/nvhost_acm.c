@@ -31,10 +31,22 @@
 
 #include "dev.h"
 
-#define ACM_TIMEOUT 1*HZ
+#define MAX_ACM_TIMEOUT 1*HZ
+#define ACM_TIMEOUT 4
 #define SUSPEND_TIMEOUT 6*HZ // As per __device_suspend timer.expires
-#define DISABLE_3D_POWERGATING
 #define DISABLE_MPE_POWERGATING
+
+static int acm_timeout = ACM_TIMEOUT;
+
+void nvhost_set_max_acm_timeout(bool enable)
+{
+	if (enable == true)
+		acm_timeout = MAX_ACM_TIMEOUT;
+	else
+		acm_timeout = ACM_TIMEOUT;
+	printk(KERN_INFO "%s: ACM_TIMOUT=%d\n", __func__, acm_timeout);
+}
+EXPORT_SYMBOL(nvhost_set_max_acm_timeout);
 
 void nvhost_module_busy(struct nvhost_module *mod)
 {
@@ -106,7 +118,7 @@ void nvhost_module_idle_mult(struct nvhost_module *mod, int refs)
 	mutex_lock(&mod->lock);
 	if (atomic_sub_return(refs, &mod->refcount) == 0) {
 		BUG_ON(!mod->powered);
-		schedule_delayed_work(&mod->powerdown, ACM_TIMEOUT);
+		schedule_delayed_work(&mod->powerdown, acm_timeout);
 		kick = true;
 	}
 	mutex_unlock(&mod->lock);
@@ -122,8 +134,6 @@ static const char *get_module_clk_id(const char *module, int index)
 	else if (index == 2 && strcmp(module, "gr2d") == 0)
 		return "emc";
 	else if (index == 1 && strcmp(module, "gr3d") == 0)
-		return "emc";
-	else if (index == 1 && strcmp(module, "mpe") == 0)
 		return "emc";
 	else if (index == 0)
 		return module;
@@ -157,7 +167,7 @@ int nvhost_module_init(struct nvhost_module *mod, const char *name,
 				__func__, name);
 			break;
 		}
-		if ((rate != clk_get_rate(mod->clk[i])) && (!strstr(name, "mpe")))
+		if (rate != clk_get_rate(mod->clk[i]))
 			clk_set_rate(mod->clk[i], rate);
 		i++;
 	}
@@ -172,7 +182,7 @@ int nvhost_module_init(struct nvhost_module *mod, const char *name,
 	mod->powergate_id = get_module_powergate_id(name);
 	mod->force_suspend = false;
 
-#ifdef DISABLE_3D_POWERGATING
+#if CONFIG_DISABLE_3D_POWERGATING
 	/*
 	 * It is possible for the 3d block to generate an invalid memory
 	 * request during the power up sequence in some cases.  Workaround
@@ -251,7 +261,7 @@ void nvhost_module_suspend(struct nvhost_module *mod, bool system_suspend)
 		dev = container_of(mod, struct nvhost_master, mod);
 	}
 	else {
-		idle_timeout = ACM_TIMEOUT;
+		idle_timeout = acm_timeout;
 		dev = container_of(mod, struct nvhost_channel, mod)->dev;
 	}
 

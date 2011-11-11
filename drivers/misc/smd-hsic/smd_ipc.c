@@ -389,6 +389,9 @@ static int smdipc_open(struct inode *inode, struct file *file)
 	}
 
 	smdipc->open_fail_cnt = 0;
+
+	/* modem boot success!!, clear reset count */
+	smdctl_retry_reset_count(false);
 	return 0;
 
 err_smdipc_start:

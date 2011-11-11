@@ -336,7 +336,7 @@ CFLAGS_MODULE   = -Wno-array-bounds -mtune=cortex-a9 -mfpu=vfpv3-d16 -O2
 AFLAGS_MODULE   = $(MODFLAGS)
 LDFLAGS_MODULE  =
 CFLAGS_KERNEL	= $(MODFLAGS)
-AFLAGS_KERNEL	= $(MODFLAGS) 
+AFLAGS_KERNEL	= $(MODFLAGS)
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 

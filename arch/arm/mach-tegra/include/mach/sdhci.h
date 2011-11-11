@@ -24,6 +24,9 @@ struct tegra_sdhci_platform_data {
 	const char *clk_id;
 	int force_hs;
 	int cd_gpio;
+#if defined CONFIG_MACH_BOSE_ATT
+	int cd_gpio_polarity;
+#endif	
 	int wp_gpio;
 	int power_gpio;
 

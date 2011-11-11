@@ -44,6 +44,10 @@
 #include <linux/mmc/discard.h>
 #endif
 
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1_CHN)
+#include <linux/wakelock.h>
+#endif
+
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
@@ -63,6 +67,10 @@ MODULE_ALIAS("mmc:block");
  */
 #define MMC_SHIFT	3
 #define MMC_NUM_MINORS	(256 >> MMC_SHIFT)
+
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1_CHN)
+static struct wake_lock mmc_chkpart_wake_lock;
+#endif
 
 #ifdef CONFIG_MMC_DISCARD_MOVINAND
 #define DISCARD_THRESHOLD	65536 /* 32MB threadhold with 512byte sector unit */
@@ -534,6 +542,14 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 			brq.data.flags |= MMC_DATA_WRITE;
 		}
 
+#ifdef CONFIG_MACH_BOSE_ATT
+		if (mmc_card_sd(card) && !mmc_host_sd_present(card->host)) {
+			printk(KERN_ERR "%s: Bad Request. SDcard removed.\n",
+					req->rq_disk->disk_name);
+			goto err_sd_removed;
+		}
+#endif
+
 		mmc_set_data_timeout(&brq.data, card);
 
 		brq.data.sg = mq->sg;
@@ -676,6 +692,16 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 
 	return 1;
 
+#ifdef CONFIG_MACH_BOSE_ATT
+ err_sd_removed:
+	spin_lock_irq(&md->lock);
+
+	__blk_end_request_all(req, -EIO);
+
+	spin_unlock_irq(&md->lock);
+	mmc_release_host(card->host);
+	return 0;
+#endif
  cmd_err:
  	/*
  	 * If this is an SD card and we're writing, we can first
@@ -920,7 +946,19 @@ static int mmc_blk_probe(struct mmc_card *card)
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	mmc_set_bus_resume_policy(card->host, 1);
 #endif
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1_CHN)
+       wake_lock(&mmc_chkpart_wake_lock);
+	printk(KERN_INFO "%s: %s wake lock for check partition+++\n",
+		    __func__, md->disk->disk_name);
+#endif
+
 	add_disk(md->disk);
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1_CHN)
+       wake_unlock(&mmc_chkpart_wake_lock);
+	printk(KERN_INFO "%s: %s wake lock for check partition---\n",
+		    __func__, md->disk->disk_name);
+#endif
+
 	return 0;
 
  out:
@@ -1004,6 +1042,10 @@ static int __init mmc_blk_init(void)
 {
 	int res;
 
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1_CHN)
+       wake_lock_init(&mmc_chkpart_wake_lock,WAKE_LOCK_SUSPEND,"mmc_chkpart");
+#endif
+
 	res = register_blkdev(MMC_BLOCK_MAJOR, "mmc");
 	if (res)
 		goto out;
@@ -1036,6 +1078,10 @@ static void __exit mmc_blk_exit(void)
 #endif
 	mmc_unregister_driver(&mmc_driver);
 	unregister_blkdev(MMC_BLOCK_MAJOR, "mmc");
+
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1_CHN)
+		wake_lock_destroy(&mmc_chkpart_wake_lock);
+#endif
 }
 
 module_init(mmc_blk_init);

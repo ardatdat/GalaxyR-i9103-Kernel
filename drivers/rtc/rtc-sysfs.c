@@ -208,7 +208,83 @@ rtc_sysfs_set_wakealarm(struct device *dev, struct device_attribute *attr,
 static DEVICE_ATTR(wakealarm, S_IRUGO | S_IWUSR,
 		rtc_sysfs_show_wakealarm, rtc_sysfs_set_wakealarm);
 
+#if defined(CONFIG_MACH_N1_CHN)
+// 0|1234|56|78|90|12
+// 1|2010|01|01|00|00
+//en yyyy mm dd hh mm
+#define BOOTALM_BIT_EN       0
+#define BOOTALM_BIT_YEAR     1
+#define BOOTALM_BIT_MONTH    5
+#define BOOTALM_BIT_DAY      7
+#define BOOTALM_BIT_HOUR     9
+#define BOOTALM_BIT_MIN     11
+#define BOOTALM_BIT_TOTAL   13
 
+static ssize_t
+rtc_sysfs_show_bootalarm(struct device *dev, struct device_attribute *attr, char *buf)
+{
+/*
+	ssize_t retval;
+    unsigned long alarm;
+	struct rtc_wkalrm alm;
+    struct rtc_device *rtc = to_rtc_device(dev);
+
+	retval = rtc->ops->read_bootalarm(rtc->dev.parent, &alm);
+	if (retval==0)
+    {
+        alm.time.tm_mon += 1;
+        alm.time.tm_year += 2000;
+        retval = sprintf(buf, "%d%04d%02d%02d%02d%02d\n", alm.enabled,
+            alm.time.tm_year, alm.time.tm_mon, alm.time.tm_mday,
+            alm.time.tm_hour, alm.time.tm_min); 
+    }
+
+	return retval;
+*/
+	return 0;
+}
+
+static ssize_t
+rtc_sysfs_set_bootalarm(struct device *dev, struct device_attribute *attr, const char *buf, size_t n)
+{
+    ssize_t retval;
+    struct rtc_wkalrm alm;
+    struct rtc_device *rtc_dev = dev;
+    char buf_ptr[BOOTALM_BIT_TOTAL+1];
+
+
+    strlcpy(buf_ptr, buf, BOOTALM_BIT_TOTAL+1);
+
+    alm.time.tm_sec = 0;
+
+    alm.time.tm_min  =  (buf_ptr[BOOTALM_BIT_MIN]    -'0') * 10
+                      + (buf_ptr[BOOTALM_BIT_MIN+1]  -'0');
+    alm.time.tm_hour =  (buf_ptr[BOOTALM_BIT_HOUR]   -'0') * 10
+                      + (buf_ptr[BOOTALM_BIT_HOUR+1] -'0');
+    alm.time.tm_mday =  (buf_ptr[BOOTALM_BIT_DAY]    -'0') * 10
+                      + (buf_ptr[BOOTALM_BIT_DAY+1]  -'0');
+    alm.time.tm_mon  =  (buf_ptr[BOOTALM_BIT_MONTH]  -'0') * 10
+                      + (buf_ptr[BOOTALM_BIT_MONTH+1]-'0');
+    alm.time.tm_year =  (buf_ptr[BOOTALM_BIT_YEAR]   -'0') * 1000
+                      + (buf_ptr[BOOTALM_BIT_YEAR+1] -'0') * 100
+                      + (buf_ptr[BOOTALM_BIT_YEAR+2] -'0') * 10
+                      + (buf_ptr[BOOTALM_BIT_YEAR+3] -'0');
+
+    alm.enabled = (*buf_ptr == '1');
+
+    //printk("%s : tm(%d %04d.%02d.%02d %02d:%02d:%02d)\n", __func__,alm.enabled,
+    //   alm.time.tm_year, alm.time.tm_mon, alm.time.tm_mday, alm.time.tm_hour, alm.time.tm_min, alm.time.tm_sec);
+
+    alm.time.tm_mon -= 1;
+    alm.time.tm_year -= 1900;
+
+    retval = rtc_set_alarm_boot(rtc_dev, &alm);
+	
+    return retval;
+}
+static DEVICE_ATTR(bootalarm, S_IRUGO | S_IWUGO,
+		rtc_sysfs_show_bootalarm, rtc_sysfs_set_bootalarm);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 /* The reason to trigger an alarm with no process watching it (via sysfs)
  * is its side effect:  waking from a system state like suspend-to-RAM or
  * suspend-to-disk.  So: no attribute unless that side effect is possible.
@@ -234,6 +310,13 @@ void rtc_sysfs_add_device(struct rtc_device *rtc)
 	if (err)
 		dev_err(rtc->dev.parent,
 			"failed to create alarm attribute, %d\n", err);
+
+#if defined(CONFIG_MACH_N1_CHN)
+	err = device_create_file(&rtc->dev, &dev_attr_bootalarm);
+	if (err)
+		dev_err(rtc->dev.parent,
+			"failed to create AutoPowerup attribute, %d\n", err);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 }
 
 void rtc_sysfs_del_device(struct rtc_device *rtc)
@@ -241,6 +324,9 @@ void rtc_sysfs_del_device(struct rtc_device *rtc)
 	/* REVISIT did we add it successfully? */
 	if (rtc_does_wakealarm(rtc))
 		device_remove_file(&rtc->dev, &dev_attr_wakealarm);
+#if defined(CONFIG_MACH_N1_CHN)
+	device_remove_file(&rtc->dev, &dev_attr_bootalarm);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 }
 
 void __init rtc_sysfs_init(struct class *rtc_class)

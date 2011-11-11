@@ -334,9 +334,6 @@ static void input_handle_event(struct input_dev *dev,
 static bool forced_upload = false;
 static void enter_upload_mode(unsigned long val)
 {
-	pr_info("enter_upload_mode - not working\n");
-	return;
-
 	int debuglevel = kernel_sec_get_debug_level();
     if (forced_upload
 		&& (debuglevel == KERNEL_SEC_DEBUG_LEVEL_MID

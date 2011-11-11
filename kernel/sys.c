@@ -318,17 +318,10 @@ EXPORT_SYMBOL_GPL(kernel_restart);
 
 static void kernel_shutdown_prepare(enum system_states state)
 {
-	printk(KERN_EMERG "%s(%d) +\n", __func__, __LINE__);
-	
 	blocking_notifier_call_chain(&reboot_notifier_list,
 		(state == SYSTEM_HALT)?SYS_HALT:SYS_POWER_OFF, NULL);
-		
-	printk(KERN_EMERG "%s(%d)\n", __func__, __LINE__);
-
 	system_state = state;
 	device_shutdown();
-	
-	printk(KERN_EMERG "%s(%d) -\n", __func__, __LINE__);
 }
 /**
  *	kernel_halt - halt the system
@@ -352,23 +345,11 @@ EXPORT_SYMBOL_GPL(kernel_halt);
  */
 void kernel_power_off(void)
 {
-	printk(KERN_EMERG "%s(%d) +\n", __func__, __LINE__);
-
 	kernel_shutdown_prepare(SYSTEM_POWER_OFF);
-
-	printk(KERN_EMERG "%s(%d)\n", __func__, __LINE__);
-	
 	if (pm_power_off_prepare)
 		pm_power_off_prepare();
-		
-	printk(KERN_EMERG "%s(%d)\n", __func__, __LINE__);
-
 	disable_nonboot_cpus();
-	
-	printk(KERN_EMERG "%s(%d)\n", __func__, __LINE__);
-
 	sysdev_shutdown();
-	
 	printk(KERN_EMERG "Power down.\n");
 	machine_power_off();
 }

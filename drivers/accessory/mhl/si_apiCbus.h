@@ -233,7 +233,7 @@ enum
 	MHD_GET_SC1_ERRORCODE		= 0x69,	// Get Vendor-Specific command error code.
 	MHD_GET_DDC_ERRORCODE		= 0x6A,	// Get DDC channel command error code.
 	MHD_GET_MSC_ERRORCODE		= 0x6B,	// Get MSC command error code.
-	MHD_WRITE_BURST				= 0x6C,	// Write 1-16 bytes to responder’s scratchpad.
+	MHD_WRITE_BURST				= 0x6C,	// Write 1-16 bytes to responders scratchpad.
 	MHD_GET_SC3_ERRORCODE		= 0x6D	// Get channel 3 command error code.
 };
 

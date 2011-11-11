@@ -64,7 +64,14 @@ static struct clk **graphics_clks;
 static struct clk **graphics_restore_clks;
 static unsigned long  *graphics_restore_clk_rates;
 static struct tegra_camera_clk_config *graphics_clk_cfg;
-#endif
+
+#ifdef CONFIG_TEGRA_CPU_FREQ_LOCK
+extern void tegra_cpu_lock_speed(int min_rate, int timeout_ms);
+extern void tegra_cpu_unlock_speed(void);
+#endif /* CONFIG_TEGRA_CPU_FREQ_LOCK */
+extern void nvhost_set_max_acm_timeout(bool enable);
+#endif /* CONFIG_TEGRA_DYNAMIC_CAMERA_CLK_RATE */
+
 static struct regulator *tegra_camera_regulator_csi;
 
 static int tegra_camera_enable_isp(void)
@@ -294,6 +301,7 @@ static long tegra_camera_ioctl(struct file *file,
 		int ret = 0;
 
 		mutex_lock(&tegra_camera_lock);
+		nvhost_set_max_acm_timeout(true);
 		if (!tegra_camera_block[id].is_enabled) {
 			ret = tegra_camera_block[id].enable();
 			tegra_camera_block[id].is_enabled = true;
@@ -330,6 +338,7 @@ static long tegra_camera_ioctl(struct file *file,
 			schedule_delayed_work(&scaling_gov_work, 0);
 		}
 #endif
+		nvhost_set_max_acm_timeout(false);
 		mutex_unlock(&tegra_camera_lock);
 		return ret;
 	}
@@ -367,6 +376,14 @@ static long tegra_camera_ioctl(struct file *file,
 		}
 		mutex_lock(&tegra_camera_lock);
 		current_usecase = buf[1];
+
+#ifdef CONFIG_TEGRA_CPU_FREQ_LOCK 
+		if (current_usecase == CAMERA_USECASE_CAMERA_CAPTURE)
+			tegra_cpu_lock_speed(1000000, 0); /* for snapshot performance */
+		else
+			tegra_cpu_unlock_speed();
+#endif /* CONFIG_TEGRA_CPU_FREQ_LOCK */
+
 		rates = graphics_clk_cfg->get_graphics_clk_freqs(
 			current_usecase,
 			current_resolution[1],

@@ -173,6 +173,8 @@ static enum tegra_suspend_mode current_suspend_mode;
 
 static unsigned int tegra_time_in_suspend[32];
 
+enum tegra_suspend_mode current_suspended_state;
+
 static inline unsigned int time_to_bin(unsigned int time)
 {
 	return fls(time);
@@ -200,6 +202,14 @@ enum tegra_suspend_mode tegra_get_suspend_mode(void)
 		return TEGRA_SUSPEND_NONE;
 
 	return pdata->suspend_mode;
+}
+
+enum tegra_suspend_mode tegra_get_current_suspend_mode(void)
+{
+	if (!pdata)
+		return TEGRA_SUSPEND_NONE;
+
+	return current_suspended_state;
 }
 
 static void set_power_timers(unsigned long us_on, unsigned long us_off,
@@ -756,13 +766,17 @@ static int tegra_suspend_enter(suspend_state_t state)
 		gpio_set_value(GPIO_PDA_ACTIVE, 0);
 #endif
 
-	if (do_lp2)
+	if (do_lp2) {
 		lp_state = 2;
-	else if (do_lp0)
+		current_suspended_state = TEGRA_SUSPEND_LP2;
+	} else if (do_lp0) {
 		lp_state = 0;
-	else
+		current_suspended_state = TEGRA_SUSPEND_LP0;
+	} else {
 		lp_state = 1;
-
+		current_suspended_state = TEGRA_SUSPEND_LP1;
+	}
+	
 	local_irq_save(flags);
 	local_fiq_disable();
 
@@ -889,37 +903,6 @@ void __init tegra_init_suspend(struct tegra_suspend_platform_data *plat)
 	(void)reg;
 	(void)mode;
 
-	if (plat->suspend_mode == TEGRA_SUSPEND_LP0 && tegra_lp0_vec_size) {
-		unsigned char *reloc_lp0;
-		unsigned long tmp;
-		void __iomem *orig;
-		reloc_lp0 = kmalloc(tegra_lp0_vec_size + L1_CACHE_BYTES - 1,
-					GFP_KERNEL);
-		WARN_ON(!reloc_lp0);
-		if (!reloc_lp0) {
-			pr_err("%s: Failed to allocate reloc_lp0\n",
-				__func__);
-			goto out;
-		}
-
-		orig = ioremap(tegra_lp0_vec_start, tegra_lp0_vec_size);
-		WARN_ON(!orig);
-		if (!orig) {
-			pr_err("%s: Failed to map tegra_lp0_vec_start %08lx\n",
-				__func__, tegra_lp0_vec_start);
-			kfree(reloc_lp0);
-			goto out;
-		}
-
-		tmp = (unsigned long) reloc_lp0;
-		tmp = (tmp + L1_CACHE_BYTES - 1) & ~(L1_CACHE_BYTES - 1);
-		reloc_lp0 = (unsigned char *)tmp;
-		memcpy(reloc_lp0, orig, tegra_lp0_vec_size);
-		iounmap(orig);
-		tegra_lp0_vec_start = virt_to_phys(reloc_lp0);
-	}
-
-out:
 	if (plat->suspend_mode == TEGRA_SUSPEND_LP0 && tegra_lp0_vec_size) {
 		wb0_restore = tegra_lp0_vec_start;
 	} else {

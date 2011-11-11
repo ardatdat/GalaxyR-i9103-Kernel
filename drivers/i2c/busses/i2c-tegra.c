@@ -293,10 +293,20 @@ static int tegra_i2c_fill_tx_fifo(struct tegra_i2c_dev *i2c_dev)
 
 	for (word = 0; word < words_to_transfer; word++) {
 		val = get_unaligned_le32(buf);
+#if !defined(CONFIG_MACH_BOSE_ATT)	/* N1 only */
 		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
 		buf += BYTES_PER_FIFO_WORD;
 		buf_remaining -= BYTES_PER_FIFO_WORD;
 		tx_fifo_avail--;
+#else	/* BOSE : avoid_dup_write_into_tx_fifo.patch */
+		/* Update the field before writing into Tx Fifo */
+		buf += BYTES_PER_FIFO_WORD;
+		buf_remaining -= BYTES_PER_FIFO_WORD;
+		tx_fifo_avail--;
+		i2c_dev->msg_buf_remaining = buf_remaining;
+		i2c_dev->msg_buf = buf;
+		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
+#endif
 	}
 
 	if (tx_fifo_avail > 0 && buf_remaining > 0) {
@@ -306,9 +316,18 @@ static int tegra_i2c_fill_tx_fifo(struct tegra_i2c_dev *i2c_dev)
 		val = 0;
 		for (byte = 0; byte < bytes_to_transfer; byte++)
 			val |= (*buf++) << (byte * 8);
+#if !defined(CONFIG_MACH_BOSE_ATT)	/* N1 only */
 		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
 		buf_remaining -= bytes_to_transfer;
 		tx_fifo_avail--;
+#else	/* BOSE : avoid_dup_write_into_tx_fifo.patch */
+		/* Update the field before writing into Tx Fifo */
+		buf_remaining -= bytes_to_transfer;
+		tx_fifo_avail--;
+		i2c_dev->msg_buf_remaining = buf_remaining;
+		i2c_dev->msg_buf = buf;
+		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
+#endif
 	}
 	BUG_ON(tx_fifo_avail > 0 && buf_remaining > 0);
 	i2c_dev->msg_buf_remaining = buf_remaining;
@@ -391,10 +410,16 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 	return 0;
 }
 
+#define I2C_VERBOSE_DEBUG_MSG 0
+
 static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 {
 	u32 status;
+#if !defined(CONFIG_MACH_BOSE_ATT)	/* N1 only */
 	const u32 status_err = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST;
+#else	/* BOSE : avoid_dup_write_into_tx_fifo.patch */
+	const u32 status_err = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST | I2C_INT_TX_FIFO_OVERFLOW;
+#endif
 	struct tegra_i2c_dev *i2c_dev = dev_id;
 
 	status = i2c_readl(i2c_dev, I2C_INT_STATUS);
@@ -414,29 +439,37 @@ static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 	}
 
 	if (unlikely(status & status_err)) {
+#if I2C_VERBOSE_DEBUG_MSG
 		dev_err(i2c_dev->dev, "I2c error status 0x%08x\n", status);
+#endif
 		if (status & I2C_INT_NO_ACK) {
 			i2c_dev->msg_err |= I2C_ERR_NO_ACK;
 			dev_err(i2c_dev->dev, "no acknowledge from address"
 					" 0x%x\n", i2c_dev->msg_add);
+#if I2C_VERBOSE_DEBUG_MSG
 			dev_err(i2c_dev->dev, "Packet status 0x%08x\n",
 				i2c_readl(i2c_dev, I2C_PACKET_TRANSFER_STATUS));
+#endif
 		}
 
 		if (status & I2C_INT_ARBITRATION_LOST) {
 			i2c_dev->msg_err |= I2C_ERR_ARBITRATION_LOST;
 			dev_err(i2c_dev->dev, "arbitration lost during "
 				" communicate to add 0x%x\n", i2c_dev->msg_add);
+#if I2C_VERBOSE_DEBUG_MSG
 			dev_err(i2c_dev->dev, "Packet status 0x%08x\n",
 				i2c_readl(i2c_dev, I2C_PACKET_TRANSFER_STATUS));            
+#endif
 		}
 
 		if (status & I2C_INT_TX_FIFO_OVERFLOW) {
 			i2c_dev->msg_err |= I2C_INT_TX_FIFO_OVERFLOW;
 			dev_warn(i2c_dev->dev, "Tx fifo overflow during "
 				" communicate to add 0x%x\n", i2c_dev->msg_add);
+#if I2C_VERBOSE_DEBUG_MSG
 			dev_warn(i2c_dev->dev, "Packet status 0x%08x\n",
 				i2c_readl(i2c_dev, I2C_PACKET_TRANSFER_STATUS));
+#endif
 		}
 
 		complete(&i2c_dev->msg_complete);
@@ -487,8 +520,7 @@ static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 
 err:
-	dump_stack();
-
+#if I2C_VERBOSE_DEBUG_MSG
 	dev_warn(i2c_dev->dev, "reg: 0x%08x 0x%08x 0x%08x 0x%08x\n",
 		 i2c_readl(i2c_dev, I2C_CNFG), i2c_readl(i2c_dev, I2C_STATUS),
 		 i2c_readl(i2c_dev, I2C_INT_STATUS),
@@ -518,11 +550,18 @@ err:
 				 i, (msgs[i].flags & I2C_M_RD) ? 'R' : 'W',
 				 msgs[i].addr, msgs[i].len);
 	}
+#endif
 
 	/* An error occured, mask all interrupts */
+#if !defined(CONFIG_MACH_BOSE_ATT)	/* N1 only */
 	tegra_i2c_mask_irq(i2c_dev, I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST |
 		I2C_INT_PACKET_XFER_COMPLETE | I2C_INT_TX_FIFO_DATA_REQ |
 		I2C_INT_RX_FIFO_DATA_REQ);
+#else	/* BOSE : avoid_dup_write_into_tx_fifo.patch */
+	tegra_i2c_mask_irq(i2c_dev, I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST |
+		I2C_INT_PACKET_XFER_COMPLETE | I2C_INT_TX_FIFO_DATA_REQ |
+		I2C_INT_RX_FIFO_DATA_REQ | I2C_INT_TX_FIFO_OVERFLOW);
+#endif
 
 	i2c_writel(i2c_dev, status, I2C_INT_STATUS);
 
@@ -584,7 +623,11 @@ static int tegra_i2c_xfer_msg(struct tegra_i2c_bus *i2c_bus,
 	if (i2c_dev->is_dvc)
 		dvc_i2c_unmask_irq(i2c_dev, DVC_CTRL_REG3_I2C_DONE_INTR_EN);
 
+#if !defined(CONFIG_MACH_BOSE_ATT)	/* N1 only */
 	int_mask = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST;
+#else	/* BOSE : avoid_dup_write_into_tx_fifo.patch */
+	int_mask = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST | I2C_INT_TX_FIFO_OVERFLOW;
+#endif
 	if (msg->flags & I2C_M_RD)
 		int_mask |= I2C_INT_RX_FIFO_DATA_REQ;
 	else if (i2c_dev->msg_buf_remaining)

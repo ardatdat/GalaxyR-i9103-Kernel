@@ -340,6 +340,14 @@ int gpio_event_input_func(struct gpio_event_input_devs *input_devs,
 	spin_unlock_irqrestore(&ds->irq_lock, irqflags);
 
 	for (i = di->keymap_size - 1; i >= 0; i--) {
+#ifdef CONFIG_MACH_BOSE_ATT
+		if (ds->use_irq) {
+			pr_info("irq %d will not be a wake-up source\n",
+				gpio_to_irq(di->keymap[i].gpio));
+			disable_irq_wake(gpio_to_irq(di->keymap[i].gpio));
+			pr_info("done..\n");
+		}
+#endif
 err_gpio_configure_failed:
 		gpio_free(di->keymap[i].gpio);
 err_gpio_request_failed:

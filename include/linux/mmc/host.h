@@ -184,6 +184,14 @@ struct mmc_host {
 	unsigned int		removed:1;	/* host is being removed */
 #endif
 
+#ifdef CONFIG_MACH_BOSE_ATT
+	unsigned int		state;		/* card slot state for SD */
+#define MMC_HOST_STATE_PRESENT	(1<<0)		/* present in sysfs */
+#define mmc_host_sd_present(h)	((h)->state & MMC_HOST_STATE_PRESENT)
+#define mmc_host_sd_set_present(h)	((h)->state |= MMC_HOST_STATE_PRESENT)
+#define mmc_host_sd_clear_present(h)	((h)->state &= ~MMC_HOST_STATE_PRESENT)
+#endif
+
 	/* Only used with MMC_CAP_DISABLE */
 	int			enabled;	/* host is enabled */
 	int			rescan_disable;	/* disable card detection */

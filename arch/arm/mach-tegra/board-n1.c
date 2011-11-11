@@ -241,7 +241,7 @@ struct bootloader_message {
 
 #define MISC_DEVICE "/dev/block/mmcblk0p5"
 
-static int write_bootloader_message(char *cmd, int mode)
+int write_bootloader_message(char *cmd, int mode)
 {
 	int fd;
 	struct file *filp;
@@ -302,6 +302,7 @@ static int write_bootloader_message(char *cmd, int mode)
 
 	return ret;
 }
+EXPORT_SYMBOL(write_bootloader_message);
 
 static int n1_notifier_call(struct notifier_block *this,
 					unsigned long code, void *_cmd)
@@ -1389,10 +1390,11 @@ static int n1_wakeup_key_twice(void)
 	return ret;
 }
 
-static bool n1_ckech_lpm(void)
+bool n1_ckech_lpm(void)
 {
 	return charging_mode_from_boot ? true : false;
 }
+EXPORT_SYMBOL(n1_ckech_lpm);
 
 static struct gpio_keys_platform_data n1_keys_platform_data = {
 	.buttons	= n1_keys,

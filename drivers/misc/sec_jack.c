@@ -33,10 +33,17 @@
 #ifdef CONFIG_MACH_BOSE_ATT
 #include <linux/mfd/stmpe.h>
 #endif
+#ifndef CONFIG_MACH_BOSE_ATT
+#include <mach/suspend.h>
+#endif
+
 #define MAX_ZONE_LIMIT		10
 #define SEND_KEY_CHECK_TIME_MS	30		/* 30ms */
 #define DET_CHECK_TIME_MS	200		/* 200ms */
 #define WAKE_LOCK_TIME		(HZ * 5)	/* 5 sec */
+#if defined(CONFIG_MACH_N1_CHN)
+int g_headset_status = 0;
+#endif
 
 #ifdef CONFIG_MACH_BOSE_ATT
 extern struct stmpe *g_stmpe;
@@ -61,6 +68,10 @@ struct sec_jack_info {
 	struct platform_device *send_key_dev;
 	unsigned int cur_jack_type;
 	int boot_state;
+#ifndef CONFIG_MACH_BOSE_ATT
+	struct work_struct buttons_work_det; /* HACK DET worker from SEND_END intr */
+	struct workqueue_struct *queue_det;  /* HACK DET queue from SEND_END intr */
+#endif	
 };
 #ifdef CONFIG_MACH_BOSE_ATT
 struct sec_jack_info *g_jack_info;
@@ -109,6 +120,10 @@ static struct gpio_event_platform_data sec_jack_input_data = {
 	.info = sec_jack_input_info,
 	.info_count = ARRAY_SIZE(sec_jack_input_info),
 };
+
+#ifndef CONFIG_MACH_BOSE_ATT
+int sec_jack_detect_on_buttons_filter(struct work_struct *work);
+#endif
 
 /* gpio_input driver does not support to read adc value.
  * We use input filter to support 3-buttons of headset
@@ -231,12 +246,19 @@ static void sec_jack_set_type(struct sec_jack_info *hi, int jack_type)
 	wake_lock_timeout(&hi->det_wake_lock, WAKE_LOCK_TIME);
 
 	switch_set_state(&switch_jack_detection, jack_type);
+#if defined(CONFIG_MACH_N1_CHN)
+	g_headset_status = jack_type;
+	//pr_err("%s: g_headset_status =%d !!\n", __func__, g_headset_status);
+#endif
 	if(jack_type)
 		wm8994_jack_changed();
 }
 
 static void handle_jack_not_inserted(struct sec_jack_info *hi)
 {
+#if defined(CONFIG_MACH_N1_CHN)
+	//pr_err("%s: sec_jack_set_type(hi, SEC_JACK_NO_DEVICE) !!\n", __func__);
+#endif
 	sec_jack_set_type(hi, SEC_JACK_NO_DEVICE);
 #ifndef CONFIG_MACH_BOSE_ATT
 	if (!hi->boot_state) {
@@ -346,6 +368,8 @@ static irqreturn_t sec_jack_detect_irq_thread(int irq, void *dev_id)
 	int time_left_ms = DET_CHECK_TIME_MS;
 	unsigned npolarity = !hi->pdata->det_active_high;
 
+	pr_info("%s : cur_jack_type=%d\n", __func__, hi->cur_jack_type);
+
 	/* debounce headset jack.  don't try to determine the type of
 	 * headset until the detect state is true for a while.
 	 */
@@ -428,6 +452,18 @@ void sec_jack_buttons_work(struct work_struct *work)
 	pr_warn("%s: key is skipped. ADC value is %d\n", __func__, adc);
 }
 
+#ifndef CONFIG_MACH_BOSE_ATT
+int sec_jack_detect_on_buttons_filter(struct work_struct *work)
+{
+	struct sec_jack_info *hi = container_of(work, struct sec_jack_info, buttons_work_det);
+	if (gpio_get_value(hi->pdata->det_gpio) && hi->cur_jack_type) {
+		pr_info("%s : headset removed\n", __func__);
+		determine_jack_type(hi);
+	}
+	return 1;
+}
+#endif
+
 static int sec_jack_probe(struct platform_device *pdev)
 {
 	struct sec_jack_info *hi;
@@ -488,7 +524,15 @@ static int sec_jack_probe(struct platform_device *pdev)
 		goto err_switch_dev_register_send_end;
 	}
 	wake_lock_init(&hi->det_wake_lock, WAKE_LOCK_SUSPEND, "sec_jack_det");
-
+#ifndef CONFIG_MACH_BOSE_ATT
+	INIT_WORK(&hi->buttons_work_det, sec_jack_detect_on_buttons_filter);
+	hi->queue_det = create_singlethread_workqueue("sec_jack_wq_det");
+	if (hi->queue_det == NULL) {
+		ret = -ENOMEM;
+		pr_err("%s: Failed to create workqueue\n", __func__);
+		goto err_create_wq_failed;
+	}
+#endif
 	INIT_WORK(&hi->buttons_work, sec_jack_buttons_work);
 	hi->queue = create_singlethread_workqueue("sec_jack_wq");
 	if (hi->queue == NULL) {
@@ -611,9 +655,35 @@ static int sec_jack_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifndef CONFIG_MACH_BOSE_ATT
+static int sec_jack_suspend(struct platform_device *pdev)
+{
+	struct sec_jack_info *hi = dev_get_drvdata(&pdev->dev);
+
+	return 0;
+}
+
+static int sec_jack_resume(struct platform_device *pdev)
+{
+	struct sec_jack_info *hi = dev_get_drvdata(&pdev->dev);
+
+	pr_info("%s: Current_suspend_mode = %d \n",
+			__func__, tegra_get_current_suspend_mode());     
+	if (tegra_get_current_suspend_mode() == TEGRA_SUSPEND_LP0) {
+		queue_work(hi->queue_det, &hi->buttons_work_det);
+	}
+
+	return 0;
+}
+#endif
+
 static struct platform_driver sec_jack_driver = {
 	.probe = sec_jack_probe,
 	.remove = sec_jack_remove,
+#ifndef CONFIG_MACH_BOSE_ATT
+	.suspend = sec_jack_suspend,
+	.resume = sec_jack_resume,
+#endif	
 	.driver = {
 			.name = "sec_jack",
 			.owner = THIS_MODULE,

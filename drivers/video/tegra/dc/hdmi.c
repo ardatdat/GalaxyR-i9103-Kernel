@@ -1033,7 +1033,7 @@ static void tegra_dc_hdmi_setup_avi_infoframe(struct tegra_dc *dc, bool dvi)
 			avi.vic = 19; /* 50 Hz */
 	} else if (dc->mode.v_active == 1080) {
 		avi.m = HDMI_AVI_M_16_9;
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+#ifdef CONFIG_TEGRA_ENABLE_SUPPORT_FOR_1080p_30HZ
 		avi.vic = 34; /* 30 Hz */
 #else		
 		if (dc->mode.h_front_porch == 88)

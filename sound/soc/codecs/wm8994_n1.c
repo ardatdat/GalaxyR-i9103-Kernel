@@ -24,6 +24,8 @@
  */
 #define SUBJECT "wm8994_n1.c"
 
+#define CONFIG_SND_SOC_N1_AUDIO_CHN 1 //jm.choi_2010.08.04 add for audio
+
 /*
  * Definitions of tunning volumes for wm8994
  */
@@ -113,6 +115,19 @@ struct gain_info_t playback_gain_table[] = {
 		.reg  = WM8994_AIF1_DAC1_RIGHT_VOLUME,	/* 403h */
 		.mask = WM8994_AIF1DAC1R_VOL_MASK,
 		.gain = WM8994_AIF1DAC1_VU | 0xBA
+#if defined(CONFIG_SND_SOC_N1_AUDIO_CHN)
+	}, { /* HP */
+		.mode = PLAYBACK_HP,
+		.reg  = WM8994_LEFT_OUTPUT_VOLUME,	/* 1Ch */
+		.mask = WM8994_HPOUT1L_VOL_MASK,
+		.gain = WM8994_HPOUT1_VU | 0x38
+	}, {
+		.mode = PLAYBACK_HP,
+		.reg  = WM8994_RIGHT_OUTPUT_VOLUME,	/* 1Dh */
+		.mask = WM8994_HPOUT1R_VOL_MASK,
+		.gain = WM8994_HPOUT1_VU | 0x38
+	}, {
+#else	
 	}, { /* HP */
 		.mode = PLAYBACK_HP,
 		.reg  = WM8994_LEFT_OUTPUT_VOLUME,	/* 1Ch */
@@ -124,6 +139,7 @@ struct gain_info_t playback_gain_table[] = {
 		.mask = WM8994_HPOUT1R_VOL_MASK,
 		.gain = WM8994_HPOUT1_VU | 0x31
 	}, {
+#endif	
 		.mode = PLAYBACK_HP,
 		.reg  = WM8994_LEFT_OPGA_VOLUME,	/* 20h */
 		.mask = WM8994_MIXOUTL_VOL_MASK,
@@ -254,6 +270,18 @@ struct gain_info_t playback_gain_table[] = {
 		.mask = WM8994_HPOUT1R_VOL_MASK,
 		.gain = WM8994_HPOUT1_VU | 0x1B
 	}, { /* HP_NO_MIC */
+#if defined(CONFIG_SND_SOC_N1_AUDIO_CHN)
+		.mode = PLAYBACK_HP_NO_MIC,
+		.reg  = WM8994_LEFT_OUTPUT_VOLUME,  /* 1Ch */
+		.mask = WM8994_HPOUT1L_VOL_MASK,
+		.gain = WM8994_HPOUT1_VU | 0x38
+	}, {
+		.mode = PLAYBACK_HP_NO_MIC,
+		.reg  = WM8994_RIGHT_OUTPUT_VOLUME, /* 1Dh */
+		.mask = WM8994_HPOUT1R_VOL_MASK,
+		.gain = WM8994_HPOUT1_VU | 0x38
+	}, {
+#else
 		.mode = PLAYBACK_HP_NO_MIC,
 		.reg  = WM8994_LEFT_OUTPUT_VOLUME,  /* 1Ch */
 		.mask = WM8994_HPOUT1L_VOL_MASK,
@@ -264,6 +292,7 @@ struct gain_info_t playback_gain_table[] = {
 		.mask = WM8994_HPOUT1R_VOL_MASK,
 		.gain = WM8994_HPOUT1_VU | 0x31
 	}, {
+#endif	
 		.mode = PLAYBACK_HP_NO_MIC,
 		.reg  = WM8994_LEFT_OPGA_VOLUME,	/* 20h */
 		.mask = WM8994_MIXOUTL_VOL_MASK,

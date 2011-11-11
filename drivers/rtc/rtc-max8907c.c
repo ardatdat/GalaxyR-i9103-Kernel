@@ -52,7 +52,21 @@ static irqreturn_t rtc_update_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int tm_calc(struct rtc_time *tm, u8 *buf, int len)
+#if defined(CONFIG_MACH_N1_CHN)
+static irqreturn_t max8907c_rtc_alarm1_irq(int irq, void *data)
+{
+	struct max8907c_rtc_info *info = data;
+	
+	dev_info(info->rtc_dev, "%s:irq(%d)\n", __func__, irq);
+
+	/* disable ALARM0 except for 1SEC alarm */
+	rtc_update_irq(info->rtc_dev, 1, RTC_IRQF | RTC_AF);
+
+	return IRQ_HANDLED;
+}
+#endif  /*--  CHN feature - power_on_alarm_bsystar --*/
+
+int tm_calc(struct rtc_time *tm, u8 *buf, int len)
 {
 	if (len < TIME_NUM)
 		return -EINVAL;
@@ -61,8 +75,9 @@ static int tm_calc(struct rtc_time *tm, u8 *buf, int len)
 			+ (buf[RTC_YEAR1] >> 4) * 10
 			+ (buf[RTC_YEAR1] & 0xf);
 	tm->tm_year -= 1900;
+	// RTC issue when July 30th to July 31th 
 	tm->tm_mon = ((buf[RTC_MONTH] >> 4) & 0x01) * 10
-			+ (buf[RTC_MONTH] & 0x0f);
+			+ (buf[RTC_MONTH] & 0x0f) -1;
 	tm->tm_mday = ((buf[RTC_DATE] >> 4) & 0x03) * 10
 			+ (buf[RTC_DATE] & 0x0f);
 	tm->tm_wday = buf[RTC_WEEKDAY] & 0x07;
@@ -82,7 +97,7 @@ static int tm_calc(struct rtc_time *tm, u8 *buf, int len)
 	return 0;
 }
 
-static int data_calc(u8 *buf, struct rtc_time *tm, int len)
+int data_calc(u8 *buf, struct rtc_time *tm, int len)
 {
 	u8 high, low;
 
@@ -98,10 +113,12 @@ static int data_calc(u8 *buf, struct rtc_time *tm, int len)
 	low = low - high * 10;
 	high = high - (high / 10) * 10;
 	buf[RTC_YEAR1] = (high << 4) + low;
-	high = tm->tm_mon / 10;
-	low = tm->tm_mon;
-	low = low - high * 10;
-	buf[RTC_MONTH] = (high << 4) + low;
+
+	// RTC issue when July 30th to July 31th 
+	high = (tm->tm_mon + 1) / 10;
+	low = (tm->tm_mon + 1) % 10;
+	buf[RTC_MONTH] = (high << 4) + low; 
+	   
 	high = tm->tm_mday / 10;
 	low = tm->tm_mday;
 	low = low - high * 10;
@@ -133,7 +150,11 @@ static int max8907c_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	if (ret < 0)
 		return ret;
 	ret = tm_calc(tm, buf, TIME_NUM);
-
+	//tm->tm_year -= 1000;
+	pr_info("%s: %02d:%02d:%02d %02d/%02d/%04d\n",
+		__func__,
+		tm->tm_hour, tm->tm_min, tm->tm_sec,
+		tm->tm_mon + 1, tm->tm_mday, tm->tm_year + 1900);
 	return ret;
 }
 
@@ -218,10 +239,105 @@ static int max8907c_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	return ret;
 }
 
+
+#if defined(CONFIG_MACH_N1_CHN)
+
+int mode_12_24;
+EXPORT_SYMBOL(mode_12_24);
+struct max8907c * info_alarm_boot;
+EXPORT_SYMBOL(info_alarm_boot);
+
+static int max8907c_rtc_set_alarm_boot(struct device *dev, struct rtc_wkalrm *alrm)
+{
+	struct max8907c_rtc_info *info = dev_get_drvdata(dev);
+	//struct rtc_wkalrm *alm_tmp;
+	u8 data[TIME_NUM] ={0,};
+	int ret =0;
+		
+	if(!info) {
+		printk("NULL check : info_boot = NULL!!!!!! max8997_rtc_set_alarm_boot\n");
+		goto out;
+	}
+	
+	pr_info("%s 3. before read: %02d:%02d:%02d %02d/%02d/%04d\n",
+		__func__,
+		alrm->time.tm_hour, alrm->time.tm_min, alrm->time.tm_sec,
+		alrm->time.tm_mon + 1, alrm->time.tm_mday, alrm->time.tm_year + 1900);
+	
+	ret = data_calc(data, &alrm->time, TIME_NUM);
+	if (ret < 0)
+		return ret;
+
+	ret = max8907c_reg_write(info->i2c, MAX8907C_REG_ALARM1_CNTL, 0x00);
+	
+	ret = max8907c_reg_bulk_write(info->i2c, MAX8907C_REG_ALARM1_SEC, TIME_NUM,data);
+	if (ret < 0) {
+		dev_err(info->rtc_dev, "%s: fail to write alarm reg(%d)\n",__func__, ret);	
+		goto out;
+	}
+	
+	/* only enable alarm on year/month/day/hour/min/sec */
+	ret = max8907c_reg_write(info->i2c, MAX8907C_REG_ALARM1_CNTL, 0x77);
+
+	// for debug
+	ret = max8907c_reg_bulk_read(info->i2c, MAX8907C_REG_ALARM1_SEC, TIME_NUM,data);
+	ret = tm_calc(&alrm->time,data,8);
+	pr_info("%s 3. after read: %02d:%02d:%02d %02d/%02d/%04d\n",
+		__func__,
+		alrm->time.tm_hour, alrm->time.tm_min, alrm->time.tm_sec,
+		alrm->time.tm_mon + 1, alrm->time.tm_mday, alrm->time.tm_year + 1900);
+
+out:
+	//mutex_unlock(&info->lock);	
+	return ret;
+}
+
+static void max8907c_rtc_read_alarm_boot(struct platform_device *pdev)
+{
+	struct max8907c_rtc_info *info = platform_get_drvdata(pdev);
+	u8 data[TIME_NUM] ={0,};
+	struct rtc_time tm;
+	int ret;
+
+	ret = max8907c_reg_bulk_read(info->i2c, MAX8907C_REG_RTC_SEC, TIME_NUM, data);
+	if (ret < 0) {
+		pr_err("%s: RTC read failed.\n", __func__); 
+		goto read_alarm_boot; 
+	}
+	ret = tm_calc(&tm, data, TIME_NUM);
+	if (ret) {
+		pr_err("%s: RTC tm_calc failed.\n", __func__); 
+		goto read_alarm_boot; 
+	}
+	pr_info("%s [RTC TIME ] %02d:%02d:%02d %02d/%02d/%04d\n", __func__,
+		tm.tm_hour, tm.tm_min, tm.tm_sec,
+		tm.tm_mon + 1, tm.tm_mday, tm.tm_year + 1900);
+	
+read_alarm_boot:
+	ret = max8907c_reg_bulk_read(info->i2c, MAX8907C_REG_ALARM1_SEC, TIME_NUM,data);
+	if (ret < 0) {
+		pr_err("%s: BOOTALARM read failed.\n", __func__); 
+		return;
+	}
+	ret = tm_calc(&tm, data, TIME_NUM);
+	if (ret) {
+		pr_err("%s: BOOTALARM tm_calc failed.\n", __func__); 
+		return; 
+	}
+	pr_info("%s [BOOTALARM] %02d:%02d:%02d %02d/%02d/%04d\n", __func__,
+		tm.tm_hour, tm.tm_min, tm.tm_sec,
+		tm.tm_mon + 1, tm.tm_mday, tm.tm_year + 1900);
+
+}
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
+
 static const struct rtc_class_ops max8907c_rtc_ops = {
 	.read_time	= max8907c_rtc_read_time,
 	.set_time	= max8907c_rtc_set_time,
 	.read_alarm	= max8907c_rtc_read_alarm,
+#if defined(CONFIG_MACH_N1_CHN)
+	.set_alarm_boot = max8907c_rtc_set_alarm_boot,
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 	.set_alarm	= max8907c_rtc_set_alarm,
 };
 
@@ -229,7 +345,7 @@ static int __devinit max8907c_rtc_probe(struct platform_device *pdev)
 {
 	struct max8907c *chip = dev_get_drvdata(pdev->dev.parent);
 	struct max8907c_rtc_info *info;
-	int irq, ret;
+	int irq, irq1, ret;
 
 	info = kzalloc(sizeof(struct max8907c_rtc_info), GFP_KERNEL);
 	if (!info)
@@ -238,6 +354,9 @@ static int __devinit max8907c_rtc_probe(struct platform_device *pdev)
 	info->chip = chip;
 
 	irq = chip->irq_base + MAX8907C_IRQ_RTC_ALARM0;
+#if defined(CONFIG_MACH_N1_CHN)
+	irq1= chip->irq_base + MAX8907C_IRQ_RTC_ALARM1;
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 
 	ret = request_threaded_irq(irq, NULL, rtc_update_handler,
 				   IRQF_ONESHOT, "rtc-alarm0", info);
@@ -247,6 +366,10 @@ static int __devinit max8907c_rtc_probe(struct platform_device *pdev)
 		goto out_irq;
 	}
 
+#if defined(CONFIG_MACH_N1_CHN)
+	info_alarm_boot = chip;
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
+
 	info->rtc_dev = rtc_device_register("max8907c-rtc", &pdev->dev,
 					&max8907c_rtc_ops, THIS_MODULE);
 	ret = PTR_ERR(info->rtc_dev);
@@ -255,17 +378,33 @@ static int __devinit max8907c_rtc_probe(struct platform_device *pdev)
 		goto out_rtc;
 	}
 
-	max8907c_set_bits(chip->i2c_power, MAX8907C_REG_SYSENSEL, 0x2, 0x2);
+#if defined(CONFIG_MACH_N1_CHN)
+	ret = request_threaded_irq(irq1, NULL, rtc_update_handler,
+				   IRQF_ONESHOT, "rtc-alarm1", info);
+	if (ret < 0) {
+		dev_err(chip->dev, "Failed to request IRQ: #%d: %d\n",
+			irq1, ret);
+		goto out_irq;
+	}
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 
+	max8907c_set_bits(chip->i2c_power, MAX8907C_REG_SYSENSEL, 0x2, 0x2);
+#if defined(CONFIG_MACH_N1_CHN)
+	max8907c_set_bits(chip->i2c_power, MAX8907C_REG_SYSENSEL, 0x4, 0x4);
+
+#endif
 	dev_set_drvdata(&pdev->dev, info);
 
 	platform_set_drvdata(pdev, info);
 
 	device_init_wakeup(&pdev->dev, 1);
 
+	max8907c_rtc_read_alarm_boot(pdev); 
+
 	return 0;
 out_rtc:
 	free_irq(chip->irq_base + MAX8907C_IRQ_RTC_ALARM0, info);
+	free_irq(chip->irq_base + MAX8907C_IRQ_RTC_ALARM1, info);
 
 out_irq:
 	kfree(info);
@@ -278,7 +417,9 @@ static int __devexit max8907c_rtc_remove(struct platform_device *pdev)
 
 	if (info) {
 		free_irq(info->chip->irq_base + MAX8907C_IRQ_RTC_ALARM0, info);
-
+#if defined(CONFIG_MACH_N1_CHN)
+		free_irq(info->chip->irq_base + MAX8907C_IRQ_RTC_ALARM1, info);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 		rtc_device_unregister(info->rtc_dev);
 		kfree(info);
 	}

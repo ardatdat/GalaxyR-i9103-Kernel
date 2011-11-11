@@ -123,7 +123,9 @@ void __init tegra_init_cache(void)
 static void __init tegra_init_power(void)
 {
 	tegra_powergate_power_off(TEGRA_POWERGATE_MPE);
+#if !CONFIG_DISABLE_3D_POWERGATING
 	tegra_powergate_power_off(TEGRA_POWERGATE_3D);
+#endif
 	tegra_powergate_power_off(TEGRA_POWERGATE_PCIE);
 }
 
@@ -334,6 +336,12 @@ out:
 void __init tegra_reserve(unsigned long carveout_size, unsigned long fb_size,
 	unsigned long fb2_size)
 {
+	if (tegra_lp0_vec_size)
+		if (memblock_reserve(tegra_lp0_vec_start, tegra_lp0_vec_size))
+			pr_err("Failed to reserve lp0_vec %08lx@%08lx\n",
+				tegra_lp0_vec_size, tegra_lp0_vec_start);
+
+
 	tegra_carveout_start = memblock_end_of_DRAM() - carveout_size;
 	if (memblock_remove(tegra_carveout_start, carveout_size))
 		pr_err("Failed to remove carveout %08lx@%08lx from memory "

@@ -28,6 +28,7 @@
 #include <linux/slab.h>
 #include <linux/suspend.h>
 #include <linux/delay.h>
+#include <linux/reboot.h>
 
 #include <asm/clkdev.h>
 
@@ -36,10 +37,6 @@
 #include "board.h"
 #include "clock.h"
 #include "dvfs.h"
-
-#define FREQCOUNT 13
-extern int cpufrequency[FREQCOUNT];
-extern int cpuuvoffset[FREQCOUNT];
 
 static LIST_HEAD(dvfs_rail_list);
 static DEFINE_MUTEX(dvfs_lock);
@@ -161,7 +158,7 @@ static int dvfs_rail_set_voltage(struct dvfs_rail *rail, int millivolts)
 				rail->max_millivolts * 1000);
 		}
 		if (ret) {
-			pr_err("Failed to set dvfs regulator %s to %d (max %d)\n", rail->reg_id, rail->new_millivolts, rail->max_millivolts);
+			pr_err("Failed to set dvfs regulator %s\n", rail->reg_id);
 			return ret;
 		}
 
@@ -247,7 +244,7 @@ static int dvfs_rail_connect_to_regulator(struct dvfs_rail *rail)
 static int
 __tegra_dvfs_set_rate(struct dvfs *d, unsigned long rate)
 {
-	int i = 0, j = 0, mvoffset = 0;
+	int i = 0;
 	int ret;
 
 	if (d->freqs == NULL || d->millivolts == NULL)
@@ -264,14 +261,8 @@ __tegra_dvfs_set_rate(struct dvfs *d, unsigned long rate)
 	} else {
 		while (i < d->num_freqs && rate > d->freqs[i])
 			i++;
-		if (strcmp(d->clk_name, "cpu") == 0)
-		{
-			while (j < FREQCOUNT && (rate / 1000) < cpufrequency[j]) // TODO: Make more robust
-				j++;
-			mvoffset = cpuuvoffset[j];
-		}
-		else mvoffset = 0;
-		d->cur_millivolts = d->millivolts[i] - mvoffset;
+
+		d->cur_millivolts = d->millivolts[i];
 	}
 
 	d->cur_rate = rate;
@@ -437,6 +428,23 @@ static struct notifier_block tegra_dvfs_nb = {
 	.notifier_call = tegra_dvfs_pm_notify,
 };
 
+static int tegra_dvfs_reboot_notify(struct notifier_block *nb,
+				unsigned long event, void *data)
+{
+	switch (event) {
+	case SYS_RESTART:
+	case SYS_HALT:
+	case SYS_POWER_OFF:
+		tegra_dvfs_suspend();
+		return NOTIFY_OK;
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block tegra_dvfs_reboot_nb = {
+	.notifier_call = tegra_dvfs_reboot_notify,
+};
+
 /* must be called with dvfs lock held */
 static void __tegra_dvfs_rail_disable(struct dvfs_rail *rail)
 {
@@ -515,6 +523,7 @@ int __init tegra_dvfs_late_init(void)
 	mutex_unlock(&dvfs_lock);
 
 	register_pm_notifier(&tegra_dvfs_nb);
+	register_reboot_notifier(&tegra_dvfs_reboot_nb);
 
 	return 0;
 }

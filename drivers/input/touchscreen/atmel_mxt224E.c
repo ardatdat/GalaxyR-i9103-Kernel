@@ -182,6 +182,8 @@ static u16 tsp_keystatus;
 static u32 key_led_status = false;
 #endif
 
+u8 first_palm_chk ;
+
 bool mxt_reconfig_flag;
 EXPORT_SYMBOL(mxt_reconfig_flag);
 /* 0404 work */
@@ -201,6 +203,7 @@ static u8 coin_check_count = 0;
 static bool metal_suppression_chk_flag = true;
 
 static u8 chk_touch_cnt, chk_antitouch_cnt;
+static u8 caling_check = 0;
 
 #define ABS(x,y)		( (x < y) ? (y - x) : (x - y))
 
@@ -1031,6 +1034,7 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 	int i, error;
 	u16 chkpress = 0;
 	u8 touch_message_flag = 0;
+	static int cal_move =0;
 
 	input = mxt->input;
 	status = message[MXT_MSG_T9_STATUS];
@@ -1224,9 +1228,8 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 
 
 	if (status & MXT_MSGB_T9_DETECT) {   /* case 1: detected */
-		
-		touch_message_flag = 1;
-						
+								
+
 		mtouch_info[touch_id].pressure = message[MXT_MSG_T9_TCHAMPLITUDE];  /* touch amplitude */
 		mtouch_info[touch_id].x = (int16_t)xpos;
 		mtouch_info[touch_id].y = (int16_t)ypos;
@@ -1236,10 +1239,17 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 #if defined(MXT_DRIVER_FILTER)
 			equalize_coordinate(1, touch_id, &mtouch_info[touch_id].x, &mtouch_info[touch_id].y);
 #endif
+			touch_message_flag = 1;
+			cal_move=0;
+
 		} else if (status & MXT_MSGB_T9_MOVE) { 
 #if defined(MXT_DRIVER_FILTER)
 			equalize_coordinate(0, touch_id, &mtouch_info[touch_id].x, &mtouch_info[touch_id].y);
 #endif
+			if(cal_move++>=3){
+				touch_message_flag = 1;
+				cal_move=0;
+			}		
 		}
 	} else if (status & MXT_MSGB_T9_RELEASE) {   /* case 2: released */
 		pressed_or_released = 1;
@@ -1363,7 +1373,13 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 			}
 			if (mxt_time_point == 0) 
 				mxt_time_point = jiffies_to_msecs(jiffies);
-			check_chip_calibration(mxt);
+			
+			// noise : cal problem
+			if (!caling_check){
+				check_chip_calibration(mxt);
+			}else{
+				cal_move=3;		// next try cal check
+		   }
 		}
 	}
 #if 0
@@ -1628,6 +1644,11 @@ void process_T42_message(u8 *message, struct mxt_data *mxt)
 	input = mxt->input;
 	status = message[MXT_MSG_T42_STATUS];
 
+	/* Read Charging Time */
+	uint8_t charg_time;
+	mxt_read_byte(mxt->client,  MXT_BASE_ADDR(MXT_GEN_ACQUIRECONFIG_T8)+ 0, &charg_time);
+	klogi_if("[TSP] T8 CHRGTIME =  %d \n", charg_time);
+
 	/* whether reportid is thing of atmel_mxt224E_TOUCH_KEYARRAY */
 	/* single key configuration*/
 
@@ -1651,6 +1672,12 @@ void process_T42_message(u8 *message, struct mxt_data *mxt)
 			klogi_if("[TSP] Palm(T42) Timer start !!! \n");
 		}
 	} else {
+
+		if(first_palm_chk == true)
+		{
+			first_palm_chk = false;
+		}
+		
 		if (debug >= DEBUG_INFO)
 			pr_info("[TSP] Palm(T42) Released !!! \n");
 
@@ -1905,8 +1932,10 @@ static void mxt_threaded_irq_handler(struct mxt_data *mxt)
 			/* Register read failed */
 			dev_err(&client->dev, "[TSP] Failure reading maxTouch device\n");
 		}
-		if (i == 0) need_reset = true;
-
+		if (i == 0) {
+		   	need_reset = true; 
+			break;
+		}
 		report_id = message[0];
 		if (debug >= DEBUG_RAW) { 
 			pr_info("[TSP] %s message [%08x]:",
@@ -3451,6 +3480,7 @@ static int calibrate_chip(struct mxt_data *mxt)
 	if (debug >= DEBUG_INFO)
 		pr_info("[TSP] %s\n", __func__);
 
+	caling_check = 1;
 	facesup_message_flag  = 0;
 	not_yet_count = 0;
 	mxt_time_point = 0;
@@ -3478,6 +3508,7 @@ static int calibrate_chip(struct mxt_data *mxt)
 	ret = mxt_write_byte(mxt->client, MXT_BASE_ADDR(MXT_GEN_COMMANDPROCESSOR_T6) + MXT_ADR_T6_CALIBRATE, data);
 	if ( ret < 0 ) {
 		pr_err("[TSP][ERROR] line : %d\n", __LINE__);
+		caling_check = 0;
 		return -1;
 	} else {
 		/* set flag for calibration lockup recovery if cal command was successful */
@@ -3485,9 +3516,10 @@ static int calibrate_chip(struct mxt_data *mxt)
 		cal_check_flag = 1u;
 	}
 
+ 	caling_check = 0;
 	//msleep(120);
 	msleep(60);
- 
+
 	return ret;
 }
 
@@ -3621,6 +3653,7 @@ static void check_chip_palm(struct mxt_data *mxt)
 			facesup_message_flag = 1;			
 		} else if ((tch_ch > 0 ) && ( atch_ch  == 0)) {
 			facesup_message_flag = 2;
+			if(tch_ch < 20) facesup_message_flag = 5;
 		} else if ((tch_ch == 0 ) && ( atch_ch > 0)) {
 			facesup_message_flag = 3;
 		}else {
@@ -3980,7 +4013,8 @@ static void check_chip_calibration(struct mxt_data *mxt)
 			klogi_if("[TSP] calibration was not decided yet, not_yet_count = %d\n", not_yet_count);
 			if((tch_ch == 0) && (atch_ch == 0)) {
 				not_yet_count = 0;
-			} else if(not_yet_count >= 30) {
+//			} else if(not_yet_count >= 30) {
+			} else if(not_yet_count >= 5) {		// retry count 30 -> 5
 				klogi_if("[TSP] not_yet_count over 30, re-calibrate!! \n");
 				not_yet_count =0;
 				calibrate_chip(mxt);
@@ -4027,6 +4061,8 @@ static void cal_maybe_good(struct mxt_data *mxt)
 
 			mxt->check_auto_cal = 5;
 			klogi_if("[TSP] Calibration success!! \n");
+
+			first_palm_chk = true;
 
 			if (metal_suppression_chk_flag == true) {
 				/* after 20 seconds, metal coin checking disable */
@@ -4082,6 +4118,7 @@ static void ts_100ms_tmr_work(struct work_struct *work)
 {
 	struct mxt_data *mxt = container_of(work, struct mxt_data, tmr_work);
 
+	uint8_t cal_time = 10; 
 	timer_ticks++;
 
 	klogi_if("[TSP] 100ms T %d\n", timer_ticks);
@@ -4091,20 +4128,34 @@ static void ts_100ms_tmr_work(struct work_struct *work)
 	if(facesup_message_flag ){
 	 	klogi_if("[TSP] facesup_message_flag = %d\n", facesup_message_flag);
 	 	check_chip_palm(mxt);
+
+		if(facesup_message_flag == 5) 
+	        { 
+                        cal_time = 1; 
+        	} 
 	}
 
-	if ((timer_flag == ENABLE) && (timer_ticks<20)) {
+	if ((timer_flag == ENABLE) && (timer_ticks < cal_time)) {
 		ts_100ms_timer_start(mxt);
 		palm_check_timer_flag = false;
 	} else {
-		if (palm_check_timer_flag 
-			&& ((facesup_message_flag == 1) || (facesup_message_flag == 2)) 
+		if( facesup_message_flag &&  ((first_palm_chk == true) ||cal_check_flag))
+		{
+			klogi_if("[TSP] calibrate_chip\n");
+			calibrate_chip(mxt); 
+			palm_check_timer_flag = false;
+    
+			 timer_flag = DISABLE; 
+		}	
+		else if (palm_check_timer_flag 
+			&& ((facesup_message_flag == 1) || (facesup_message_flag == 2)|| (facesup_message_flag == 5)) 
 			&& (palm_release_flag == false)) {
 			klogi_if("[TSP] calibrate_chip\n");
 			calibrate_chip(mxt);	
 			palm_check_timer_flag = false;
-		}
-		timer_flag = DISABLE;
+
+			timer_flag = DISABLE;
+		}		
 		timer_ticks = 0;
 	}
 	enable_irq(mxt->client->irq);

@@ -116,6 +116,7 @@ int smdhsic_pm_resume(void);
 void *get_smd_device(unsigned int id);
 
 extern int usb_runtime_pm_ap_initiated_L2;
+extern void smdctl_retry_reset_count(bool retry);
 extern int smdctl_set_pm_status(unsigned int);
 extern void smdctl_request_connection_recover(bool);
 

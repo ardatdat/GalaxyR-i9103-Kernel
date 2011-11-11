@@ -22,7 +22,7 @@
 #include <linux/string.h>
 #include <media/s5k5bafx.h>
 #include <media/tegra_camera.h>
-#include "s5k5bafx_setting.h"
+#include <s5k5bafx_setting.h>
 
 #define DEBUG_PRINTS 1
 #if DEBUG_PRINTS

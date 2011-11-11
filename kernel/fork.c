@@ -176,10 +176,8 @@ static inline void free_signal_struct(struct signal_struct *sig)
 
 static inline void put_signal_struct(struct signal_struct *sig)
 {
-	if (atomic_dec_and_test(&sig->sigcnt)) {
-		sched_autogroup_exit(sig);
+	if (atomic_dec_and_test(&sig->sigcnt))
 		free_signal_struct(sig);
-	}
 }
 
 int task_free_register(struct notifier_block *n)
@@ -919,7 +917,6 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 	posix_cpu_timers_init_group(sig);
 
 	tty_audit_fork(sig);
-	sched_autogroup_fork(sig);
 
 	sig->oom_adj = current->signal->oom_adj;
 	sig->oom_score_adj = current->signal->oom_score_adj;
@@ -1323,7 +1320,7 @@ bad_fork_cleanup_mm:
 		mmput(p->mm);
 bad_fork_cleanup_signal:
 	if (!(clone_flags & CLONE_THREAD))
-		put_signal_struct(p->signal);
+		free_signal_struct(p->signal);
 bad_fork_cleanup_sighand:
 	__cleanup_sighand(p->sighand);
 bad_fork_cleanup_fs:

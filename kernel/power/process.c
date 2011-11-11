@@ -41,7 +41,7 @@ static int try_to_freeze_tasks(bool sig_only)
 	struct timeval start, end;
 	u64 elapsed_csecs64;
 	unsigned int elapsed_csecs;
-	bool wakeup = false;
+	unsigned int wakeup = 0;
 
 	do_gettimeofday(&start);
 
@@ -84,11 +84,6 @@ static int try_to_freeze_tasks(bool sig_only)
 		if (!todo || time_after(jiffies, end_time))
 			break;
 
-		if (!pm_check_wakeup_events()) {
-			wakeup = true;
-			break;
-		}
-
 		/*
 		 * We need to retry, but first give the freezing tasks some
 		 * time to enter the regrigerator.
@@ -114,17 +109,18 @@ static int try_to_freeze_tasks(bool sig_only)
 		}
 		else {
 			printk("\n");
-			printk(KERN_ERR "Freezing of tasks %s after %d.%02d seconds "
-					"(%d tasks refusing to freeze):\n",
-					wakeup ? "aborted" : "failed",
-					elapsed_csecs / 100, elapsed_csecs % 100, todo);
+			printk(KERN_ERR "Freezing of tasks failed after %d.%02d seconds "
+			       "(%d tasks refusing to freeze, wq_busy=%d):\n",
+			       elapsed_csecs / 100, elapsed_csecs % 100,
+			       todo - wq_busy, wq_busy);
 		}
 		thaw_workqueues();
 
 		read_lock(&tasklist_lock);
 		do_each_thread(g, p) {
 			task_lock(p);
-			if (!wakeup && freezing(p) && !freezer_should_skip(p))
+			if (freezing(p) && !freezer_should_skip(p) &&
+				elapsed_csecs > 100)
 				sched_show_task(p);
 			cancel_freezing(p);
 			task_unlock(p);

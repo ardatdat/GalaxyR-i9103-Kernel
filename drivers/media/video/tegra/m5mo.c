@@ -49,6 +49,7 @@ struct m5mo_info {
 	struct i2c_client *i2c_client_isp;
 	struct m5mo_platform_data *pdata;
 	struct m5mo_exif_info exif_info;
+	struct m5mo_fw_version fw_ver;
 	enum m5mo_scene_mode scenemode;
 	enum m5mo_focus_mode focusmode;
 	bool power_status;
@@ -64,7 +65,9 @@ struct regulator *reg_mipi_1v2;
 static enum m5mo_dtp_test dtpTest = M5MO_DTP_TEST_OFF;
 #endif
 
+static int read_fw_cnt = 0;
 static int cur_cammod = 0;
+static int enable_scene=0;
 
 #define CAMERA_FW_FILE_PATH	"/system/cameradata/RS_M5LS.bin"
 #define CAMERA_FW_FILE_EXTERNAL_PATH	"/sdcard/RS_M5LS.bin"
@@ -89,9 +92,6 @@ static int cur_cammod = 0;
 	#define FUNC_ENTR
 	#define I2C_DEBUG 0
 #endif
-
-static int misc_inform_write(int u_count);
-static int misc_inform_read(void);
 
 static const struct m5mo_reg_isp mode_scene_auto[] = {
 	{0x0502,		5,	{0x05, 0x02, 0x03, 0x0A, 0x00} },
@@ -444,12 +444,12 @@ static const struct m5mo_reg_isp mode_isp_moderead[] = {
 
 
 static const struct m5mo_reg_isp mode_fwver_read[] = {
-	{M5MO_TABLE_READ,	5,	{0x05, 0x01, 0x00, 0x0a, 1} },
+	{M5MO_TABLE_READ,	5,	{0x05, 0x01, 0x00, 0x0A, 0x01} },
 	{M5MO_TABLE_END,	0,	{0x00} }
 };
 
 static const struct m5mo_reg_isp mode_afcal_read[] = {
-	{M5MO_TABLE_READ,	5,	{0x05, 0x01, 0x0A, 0x1d, 0x01} },
+	{M5MO_TABLE_READ,	5,	{0x05, 0x01, 0x0A, 0x1D, 0x01} },
 	{M5MO_TABLE_END,	0,	{0x00} }
 };
 
@@ -1123,6 +1123,7 @@ enum {
 	CAPTURE_MODE
 };
 
+#if 0
 static const struct m5mo_reg_isp *mode_table[] = {
 	[m5mo_MODE_1280x720_MON] = SetModeSequence_ISP_Preview_Start_Camcorder_720_change,
 	[m5mo_MODE_1280x960_MON] = SetModeSequence_ISP_Preview_Return,
@@ -1130,6 +1131,7 @@ static const struct m5mo_reg_isp *mode_table[] = {
 	[m5mo_MODE_1600x1200_CAP] = SetModeSequence_ISP_Capture_1600x1200,
 	[m5mo_MODE_3264x2448_CAP] = SetModeSequence_ISP_Capture_3264x2448,
 };
+#endif
 
 static const struct m5mo_reg_isp *scene_table[] = {
 	[SCENE_AUTO] = mode_scene_auto,
@@ -1178,8 +1180,8 @@ static const struct m5mo_reg_isp *exposure_table[] = {
 
 static const struct m5mo_reg_isp *exposure_meter_table[] = {
 	[EXPOSURE_METER_CENTER] = mode_exposure_meter_center,
-	[EXPOSURE_METER_MATRIX] = mode_exposure_meter_matrix,
-	[EXPOSURE_METER_SPOT] = mode_exposure_meter_spot
+	[EXPOSURE_METER_SPOT] = mode_exposure_meter_spot,
+	[EXPOSURE_METER_MATRIX] = mode_exposure_meter_matrix	
 };
 
 static const struct m5mo_reg_isp *iso_table[] = {
@@ -1199,6 +1201,8 @@ static const struct m5mo_reg_isp *autocontrast_table[] = {
 	[AUTOCONTRAST_OFF] = mode_autocontrast_off,
 	[AUTOCONTRAST_ON] = mode_autocontrast_on
 };
+
+static struct m5mo_info *info;
 
 int m5mo_write_reg(struct i2c_client *client, u16 addr, u8 val)
 {
@@ -1344,6 +1348,7 @@ static int m5mo_write_i2c(struct i2c_client *client, u8 *pdata, u16 flags, u16 l
 	return err;
 }
 
+#if 0
 static int check_exist_file(unsigned char *filename)
 {
 	struct file *ftestexist = NULL;
@@ -1363,6 +1368,7 @@ static int check_exist_file(unsigned char *filename)
 	pr_debug("%s : (%d)\n", __func__, ret);
 	return ret;
 }
+#endif
 
 static unsigned int get_file_size(unsigned char *filename)
 {
@@ -1505,7 +1511,6 @@ static int m5mo_write_table_Isp(struct m5mo_info *info,
 			unsigned int false = 0;
 			unsigned int count = 0;
 			unsigned int retry = 0;
-			int exist_ext_fw_file = 0;
 			unsigned char fw[30] = {CAMERA_FW_FILE_PATH};
 
 			pr_info("--FIRMWARE WRITE--\n");
@@ -1916,6 +1921,26 @@ static int m5mo_firmware_write(struct m5mo_info *info)
 	return status;
 }
 
+static int m5mo_check_firmware_version(struct m5mo_info *fw_info)
+{
+	int err, i, m_pos = 0;	
+	char t_buf[30] = {0,};
+
+	for (i = 0; i < 6; i++) {
+		err = m5mo_write_table_Isp(info, mode_fwver_read, t_buf);
+		fw_info->fw_ver.unique_id[m_pos] = t_buf[1];
+		m_pos++;
+	}
+
+	fw_info->fw_ver.unique_id[i] = '\0';
+
+	printk("*************************************\n");
+	printk("F/W Version: %s\n", fw_info->fw_ver.unique_id);
+	printk("*************************************\n");
+
+	return err;
+}
+
 static int m5mo_get_exif_info(struct m5mo_info *info)
 {
 	int status, i;
@@ -2070,13 +2095,11 @@ static int m5mo_set_preview_resolution
 	if (dtpTest) {		
 		pr_err("%s:  dtpTest = %d\n", __func__, dtpTest);	
 		m5mo_write_table_Isp(info, SetModeSequence_ISP_Preview_Start_Testpattern, NULL);
-
 		return 0;
 	}
 	
 	if (info->mode == CAPTURE_MODE) {
 		m5mo_write_table_Isp(info, SetModeSequence_ISP_Preview_Return, NULL);
-
 		return 0;
 	}
 
@@ -2136,9 +2159,18 @@ static int m5mo_set_mode
 		err = m5mo_set_preview_resolution(info, mode);
 		if(err < 0) {
 			pr_err("%s: m5mo_set_preview_resolution() returned %d\n",
-					__func__, err);
-			
+					__func__, err);			
 			return -EINVAL;
+		}
+
+		if(read_fw_cnt == 0) { 
+			err = m5mo_check_firmware_version(info);
+			if(err < 0) {
+				pr_err("%s: m5mo_check_firmware_version() returned %d\n",
+						__func__, err);				
+				return -EINVAL;
+			}			
+			read_fw_cnt = 1;
 		}
 
 		sensor_mode = MONITOR_MODE;
@@ -2152,8 +2184,7 @@ static int m5mo_set_mode
 			pr_err("%s : ae_awb unlock failed!\n", __func__);
 		}
 	}
-
-	else if(mode->StillCount == 1) {
+	else if(mode->StillCount) {
 		if (mode->xres == 3264 && mode->yres == 2448)
 			m5mo_write_table_Isp(info, SetModeSequence_ISP_Capture_3264x2448, NULL);
 		else if (mode->xres == 3264 && mode->yres == 1968)
@@ -2172,10 +2203,9 @@ static int m5mo_set_mode
 			return -EINVAL;
 		}
 
-		sensor_mode = CAPTURE_MODE;
+		sensor_mode = CAPTURE_MODE;		
 
 		err = m5mo_get_exif_info(info);
-
 		if (err)
 			goto setmode_err;
 
@@ -2219,23 +2249,23 @@ static int m5mo_set_focus_mode
 	
 	switch(arg) {
 		case FOCUS_AUTO:
-			m5mo_write_table_Isp(info, mode_focus_auto, NULL);
+			ret = m5mo_write_table_Isp(info, mode_focus_auto, NULL);
 			break;
 		
 		case FOCUS_MACRO:
-			m5mo_write_table_Isp(info, mode_focus_macro, NULL);
+			ret = m5mo_write_table_Isp(info, mode_focus_macro, NULL);
 			break;
 
 		case FOCUS_FIXED:
-			m5mo_write_table_Isp(info, mode_focus_fixed, NULL);
+			ret = m5mo_write_table_Isp(info, mode_focus_fixed, NULL);
 			break;
 
 		case FOCUS_FACE_DETECT:
-			m5mo_write_table_Isp(info, mode_focus_face_detect, NULL);
+			ret = m5mo_write_table_Isp(info, mode_focus_face_detect, NULL);
 			break;
 
 		case FOCUS_CONTINUOUS_VIDEO:
-			m5mo_write_table_Isp(info, mode_focus_continuous_video, NULL);
+			ret = m5mo_write_table_Isp(info, mode_focus_continuous_video, NULL);
 			break;
 
 		default:
@@ -2244,7 +2274,7 @@ static int m5mo_set_focus_mode
 			break;
 		}
 
-	return 0;
+	return ret;
 }
 
 static int m5mo_set_color_effect
@@ -2355,7 +2385,7 @@ static int m5mo_set_flash_mode
 static int m5mo_set_exposure
 	(struct m5mo_info *info, enum m5mo_exposure arg)
 {
-	pr_err("%s : %d\n", __func__, arg);
+	pr_debug("%s : %d\n", __func__, arg);
 	if (arg < EXPOSURE_MODE_MAX && arg >= 0)
 		return m5mo_write_table_Isp(info, exposure_table[arg], NULL);
 	else
@@ -2402,7 +2432,7 @@ static int m5mo_set_autofocus
 	(struct m5mo_info *info, enum m5mo_autofocus_control arg)
 {
 	int err;
-	pr_err("%s : %d\n", __func__, arg);
+	pr_debug("%s : %d\n", __func__, arg);
 	switch (arg) {
 	case AF_START:
 		if (info->touchaf_enable)
@@ -2497,9 +2527,9 @@ static int m5mo_return_normal_preview(struct m5mo_info *info)
 
 static int m5mo_set_face_beauty(struct m5mo_info *info, enum m5mo_recording_frame arg)
 {
-	FUNC_ENTR;
-
 	int err;
+
+	FUNC_ENTR;
 	
 	switch (arg) {
 		case M5MO_FACE_BEAUTY_OFF:
@@ -2527,7 +2557,7 @@ static int m5mo_set_recording_frame(struct m5mo_info *info, enum m5mo_recording_
 {
 	int err = 0;
 
-	pr_err("test recording frame!!!\n");
+	pr_debug("test recording frame!!!\n");
 
 	switch (arg) {
 	case RECORDING_CAF:
@@ -2568,30 +2598,28 @@ static int m5mo_set_touchaf(struct m5mo_info *info,
 	return err;
 }
 
+#if 0
 static int m5mo_check_camcorder_mode(unsigned int cmd)
 {
-
 	if(cur_cammod) {
-		pr_debug(KERN_INFO "m5mo_check_camcorder_mode : cmd = %d\n", cmd);
-		
-		if( \
-			(cmd == M5MO_IOCTL_SCENE_MODE) || \
+		//pr_debug(KERN_INFO "m5mo_check_camcorder_mode : cmd = %d\n", cmd);		
+		if( (cmd == M5MO_IOCTL_SCENE_MODE) || \
 			(cmd == M5MO_IOCTL_EXPOSURE_METER) ||\
 			(cmd == M5MO_IOCTL_ANTISHAKE) ||\
 			(cmd == M5MO_IOCTL_AUTOCONTRAST) ||\
 			(cmd == M5MO_IOCTL_SCENE_MODE)\
 		) {
-			pr_info(KERN_INFO "[m5mo_check_camcorder_mode]camcorder mode dosen't need to set %d cmd\n", cmd);
+			//pr_debug(KERN_INFO "[m5mo_check_camcorder_mode]camcorder mode dosen't need to set %d cmd\n", cmd);
 			return M5MO_CAN_NOT_SUPPORT_PARAM;
 		} else {
-			pr_info(KERN_INFO "[m5mo_check_camcorder_mode]camcorder mode !!\n");
+			//pr_debug(KERN_INFO "[m5mo_check_camcorder_mode]camcorder mode !!\n");
 			return M5MO_CAN_SUPPORT_PARAM;
 		}
-
 	} else {
 		return M5MO_CAN_SUPPORT_PARAM;
 	}
 }
+#endif
 
 /*
 static int m5mo_ioctl(struct inode *inode, struct file *file,
@@ -2601,11 +2629,28 @@ static long m5mo_ioctl(struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
 	struct m5mo_info *info = file->private_data;
-	FUNC_ENTR;
-//	pr_debug(KERN_INFO "\nm5mo_ioctl : cmd = %d\n", cmd);
 
+	//pr_debug(KERN_INFO "\nm5mo_ioctl : cmd = %d\n", cmd);
+
+#if 0
 	if(m5mo_check_camcorder_mode(cmd) == M5MO_CAN_NOT_SUPPORT_PARAM)
 		return 0;
+#endif
+
+	if(enable_scene) {
+		if(cmd == M5MO_IOCTL_WHITE_BALANCE || cmd == M5MO_IOCTL_ANTISHAKE) {
+//			pr_info("Now Scene mode is setted!!\n");
+			return 0;
+		}
+	}
+
+	if(dtpTest == M5MO_DTP_TEST_ON) {
+	    if( ( cmd != M5MO_IOCTL_SET_MODE ) &&
+			( cmd != M5MO_IOCTL_DTP_TEST ) ) {
+			printk(KERN_ERR "func(%s):line(%d)s5k6aafx_DTP_TEST_ON. cmd(%d)\n",__func__,__LINE__, cmd);
+			return 0;
+		}
+	}
 
 	switch (cmd) {
 		case M5MO_IOCTL_SET_MODE:
@@ -2620,6 +2665,11 @@ static long m5mo_ioctl(struct file *file,
 			return m5mo_set_mode(info, &mode);
 		}
 		case M5MO_IOCTL_SCENE_MODE:
+			if(arg == 0)
+				enable_scene = 0;
+			else
+				enable_scene = 1;
+			
 			return m5mo_set_scene_mode(info, (enum m5mo_scene_mode) arg);
 		case M5MO_IOCTL_FOCUS_MODE:
 			return m5mo_set_focus_mode(info, (enum m5mo_focus_mode) arg);
@@ -2669,7 +2719,7 @@ static long m5mo_ioctl(struct file *file,
 		case M5MO_IOCTL_DTP_TEST:
 		{
 			int status = 0; //cq_problem
-			pr_debug("\n : M5MO_IOCTL_DTP_TEST arg= %d\n", arg);
+			pr_debug("\n : M5MO_IOCTL_DTP_TEST arg = %lu\n", arg);
 			if (dtpTest == 1 && (enum m5mo_dtp_test) arg == 0)
 				status = m5mo_return_normal_preview(info);
 			dtpTest = (enum m5mo_dtp_test) arg;
@@ -2693,13 +2743,18 @@ static long m5mo_ioctl(struct file *file,
 
 				return m5mo_set_touchaf(info, &tpos);
 			}
+
+		case M5MO_IOCTL_FW_VERSION:
+			if (copy_to_user((void __user *)arg, &info->fw_ver,
+						sizeof(info->fw_ver)))
+				return -EFAULT;
+			break;
+			
 		default:
 			return -EINVAL;
 	}
 	return 0;
 }
-
-static struct m5mo_info *info;
 
 static int firmware_read(void)
 {
@@ -2789,6 +2844,7 @@ static int m5mo_get_FW_info(char *fw_info)
 	char t_buf[35] = {0};
 	struct file *filp;
 	mm_segment_t oldfs;
+	
 	/*CAM FW*/
 	for (i = 0; i < 30; i++) {
 		err = m5mo_write_table_Isp(info, mode_fwver_read, t_buf);
@@ -2797,6 +2853,7 @@ static int m5mo_get_FW_info(char *fw_info)
 		fw_info[m_pos] = t_buf[1];
 		m_pos++;
 	}
+	
 	/* Make blank*/
 	fw_info[m_pos++] = ' ';
 
@@ -2949,6 +3006,8 @@ static ssize_t camerafw_file_cmd_store(struct device *dev,
 	int status;
 	struct tegra_camera_clk_info info_clk;
 
+	pr_info("called %s \n", __func__);
+
 	sscanf(buf, "%d", &value);
 
 	tegra_camera_enable_vi();
@@ -2987,6 +3046,7 @@ static ssize_t cameraflash_file_cmd_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	/*Reserved*/
+	return 0;
 }
 
 static ssize_t cameraflash_file_cmd_store(struct device *dev,
@@ -3024,8 +3084,6 @@ static DEVICE_ATTR(cameraflash, 0666, cameraflash_file_cmd_show, cameraflash_fil
 static ssize_t camtype_file_cmd_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	size_t size = 0;
-
 	char camType[] = "SONY_IMX105_M5MO";
 	
 	return sprintf(buf, "%s", camType);
@@ -3058,7 +3116,6 @@ static int m5mo_open(struct inode *inode, struct file *file)
 		info->pdata->power_on();
 
 	status = m5mo_write_table_Isp(info, mode_isp_moderead, &sysmode);
-
 	if (status < 0) {
 		info->pdata->power_off();
 		info->power_status = false;
@@ -3066,6 +3123,7 @@ static int m5mo_open(struct inode *inode, struct file *file)
 
 	info->mode = SYSTEM_INITIALIZE_MODE;
 	dtpTest = M5MO_DTP_TEST_OFF;
+	read_fw_cnt = 0;
 	
 	return status;
 }
@@ -3073,11 +3131,14 @@ static int m5mo_open(struct inode *inode, struct file *file)
 int m5mo_release(struct inode *inode, struct file *file)
 {
 	FUNC_ENTR;
+	
 	if (info->pdata && info->pdata->power_off) {
 		info->pdata->power_off();
 		info->power_status = false;
 	}
 	file->private_data = NULL;
+	read_fw_cnt = 0;
+	
 	return 0;
 }
 

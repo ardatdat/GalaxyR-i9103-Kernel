@@ -46,6 +46,11 @@ struct gpio_keys_drvdata {
 	struct gpio_button_data data[0];
 };
 
+#ifdef CONFIG_MACH_BOSE_ATT
+static bool gpiokey_driver_state;
+static int gpio_powerkey_resume;
+#endif
+
 /*
  * SYSFS interface for enabling/disabling keys and switches:
  *
@@ -343,11 +348,35 @@ static void gpio_keys_report_event(struct gpio_button_data *bdata)
 	unsigned int type = button->type ?: EV_KEY;
 	int state = (gpio_get_value(button->gpio) ? 1 : 0) ^ button->active_low;
 
+#ifdef CONFIG_MACH_BOSE_ATT
+	if (gpiokey_driver_state == false) {
+		if (button->code == KEY_POWER) {
+			printk("[KEY] %s resume powerkey(%s)\n",
+				__func__, (state)?"prs":"rel");
+			input_event(input, type, button->code, !!state);
+			input_sync(input);
+
+			if (!!state)
+				gpio_powerkey_resume = 1;
+			else
+				gpio_powerkey_resume = 2;
+		}
+	} else {
+#if SEC_DEBUG
+	printk("[KEY] %s(%s)\n", code_to_str(button->code), (state)?"prs":"rel" );
+#else
+	printk("[KEY] %s\n", (state)?"prs":"rel" );
+#endif
+		input_event(input, type, button->code, !!state);
+		input_sync(input);
+	}
+#else /* CONFIG_MACH_BOSE_ATT */
 #if SEC_DEBUG
 	printk("key: %s(%s)\n", code_to_str(button->code), (state)?"prs":"rel" );
 #endif
 	input_event(input, type, button->code, !!state);
 	input_sync(input);
+#endif
 }
 
 static void gpio_keys_work_func(struct work_struct *work)
@@ -505,6 +534,10 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 	int i, error;
 	int wakeup = 0;
 
+#ifdef CONFIG_MACH_BOSE_ATT
+	gpiokey_driver_state = true;
+#endif
+
 	ddata = kzalloc(sizeof(struct gpio_keys_drvdata) +
 			pdata->nbuttons * sizeof(struct gpio_button_data),
 			GFP_KERNEL);
@@ -640,6 +673,11 @@ static int gpio_keys_suspend(struct device *dev)
 	struct gpio_keys_platform_data *pdata = pdev->dev.platform_data;
 	int i;
 
+#ifdef CONFIG_MACH_BOSE_ATT
+	gpiokey_driver_state = false;
+	gpio_powerkey_resume = 0;
+#endif
+
 	if (device_may_wakeup(&pdev->dev)) {
 		for (i = 0; i < pdata->nbuttons; i++) {
 			struct gpio_keys_button *button = &pdata->buttons[i];
@@ -665,13 +703,43 @@ static int gpio_keys_resume(struct device *dev)
 		wakeup_key = pdata->wakeup_key();
 
 	for (i = 0; i < pdata->nbuttons; i++) {
-
 		struct gpio_keys_button *button = &pdata->buttons[i];
+
+#ifdef CONFIG_MACH_BOSE_ATT
+		if (button->wakeup && device_may_wakeup(&pdev->dev)) {
+			int irq = gpio_to_irq(button->gpio);
+			disable_irq_wake(irq);
+
+			if (wakeup_key == button->code) {
+				if (gpio_powerkey_resume == 2) {
+					unsigned int type = button->type ?: EV_KEY;
+					input_event(ddata->input, type, button->code, 1);
+					input_event(ddata->input, type, button->code, 0);
+					input_sync(ddata->input);
+					printk("[KEY] %s code : %d\n", __func__, button->code);
+				} else if (gpio_powerkey_resume == 1) {
+					printk("[KEY] %s do not report fake key\n", __func__);
+				}
+		}
+		}
+#ifdef CONFIG_SAMSUNG_LPM_MODE
+		if (pdata->check_lpm) {
+			if (pdata->check_lpm() && button->code == KEY_POWER) {
+				mod_timer(&ddata->data[i].timer,
+				jiffies + msecs_to_jiffies(1500));
+			}
+		} else {
+			gpio_keys_report_event(&ddata->data[i]);
+		}
+#else
+		gpio_keys_report_event(&ddata->data[i]);
+#endif
+
+#else /* CONFIG_MACH_BOSE_ATT */
 		if (button->wakeup && device_may_wakeup(&pdev->dev)) {
 			int irq = gpio_to_irq(button->gpio);
 			disable_irq_wake(irq);
 		}
-
 		if (wakeup_key == button->code) {
 			unsigned int type = button->type ?: EV_KEY;
 			int twice = 0;
@@ -700,9 +768,15 @@ static int gpio_keys_resume(struct device *dev)
 #else
 		gpio_keys_report_event(&ddata->data[i]);
 #endif
+
+#endif /* CONFIG_MACH_BOSE_ATT */
+
 	}
 	input_sync(ddata->input);
 
+#ifdef CONFIG_MACH_BOSE_ATT
+	gpiokey_driver_state = true;
+#endif
 	return 0;
 }
 

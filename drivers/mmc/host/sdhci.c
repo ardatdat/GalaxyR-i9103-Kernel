@@ -278,16 +278,25 @@ static void sdhci_led_control(struct led_classdev *led,
 	enum led_brightness brightness)
 {
 	struct sdhci_host *host = container_of(led, struct sdhci_host, led);
+
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	unsigned long flags;
 
 	spin_lock_irqsave(&host->lock, flags);
+#endif	
 
 	if (brightness == LED_OFF)
 		sdhci_deactivate_led(host);
 	else
 		sdhci_activate_led(host);
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 }
 #endif
 
@@ -1164,11 +1173,18 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 {
 	struct sdhci_host *host;
 	bool present;
+
+#if !defined CONFIG_MACH_BOSE_ATT
 	unsigned long flags;
+#endif
 
 	host = mmc_priv(mmc);
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
+#endif
 
 	WARN_ON(host->mrq != NULL);
 
@@ -1185,11 +1201,24 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	host->mrq = mrq;
 
 	/* If polling, assume that the card is always present. */
+#if defined CONFIG_MACH_BOSE_ATT
+	if( host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
+	{
+		if(host->ops->card_detect)
+			present = host->ops->card_detect(host);
+		else
+			present = true;
+	}
+	else
+#else
 	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
 		present = true;
 	else
+#endif
+	{
 		present = sdhci_readl(host, SDHCI_PRESENT_STATE) &
 				SDHCI_CARD_PRESENT;
+	}
 
 	if (!present || host->flags & SDHCI_DEVICE_DEAD) {
 		host->mrq->cmd->error = -ENOMEDIUM;
@@ -1198,18 +1227,29 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		sdhci_send_command(host, mrq->cmd);
 
 	mmiowb();
+
+#if defined CONFIG_MACH_BOSE_ATT	
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 }
 
 static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 {
 	struct sdhci_host *host;
+#if !defined CONFIG_MACH_BOSE_ATT	
 	unsigned long flags;
+#endif
 	u8 ctrl;
 
 	host = mmc_priv(mmc);
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
+#endif
 
 	if (host->flags & SDHCI_DEVICE_DEAD)
 		goto out;
@@ -1260,19 +1300,30 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 out:
 	mmiowb();
+
+#if defined CONFIG_MACH_BOSE_ATT	
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 }
 
 static int sdhci_get_ro(struct mmc_host *mmc)
 {
 	struct sdhci_host *host;
+
+#if !defined CONFIG_MACH_BOSE_ATT	
 	unsigned long flags;
+#endif
+
 	int present;
 
 	host = mmc_priv(mmc);
-
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
-
+#endif
 	if (host->flags & SDHCI_DEVICE_DEAD) {
 		present = 0;
 	} else if (!(host->quirks & SDHCI_QUIRK_BROKEN_WRITE_PROTECT)) {
@@ -1284,7 +1335,11 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 		present = 0;
 	}
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 
 	if (host->quirks & SDHCI_QUIRK_INVERTED_WRITE_PROTECT)
 		return !!(present & SDHCI_WRITE_PROTECT);
@@ -1294,11 +1349,17 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 {
 	struct sdhci_host *host;
+#if !defined CONFIG_MACH_BOSE_ATT
 	unsigned long flags;
+#endif
 
 	host = mmc_priv(mmc);
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
+#endif
 
 	if (host->flags & SDHCI_DEVICE_DEAD)
 		goto out;
@@ -1320,7 +1381,11 @@ static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 out:
 	mmiowb();
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 }
 
 int sdhci_enable(struct mmc_host *mmc)
@@ -1359,11 +1424,30 @@ static const struct mmc_host_ops sdhci_ops = {
 
 void sdhci_card_detect_callback(struct sdhci_host *host)
 {
+#if !defined CONFIG_MACH_BOSE_ATT
 	unsigned long flags;
+#endif
 
+	int	present;
+
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
 
+#endif
+
+#if defined CONFIG_MACH_BOSE_ATT
+
+	if((host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION) && host->ops->card_detect)
+		present = host->ops->card_detect(host);
+	else
+		present = (sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT);
+
+	if(!present){
+#else
 	if (!(sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)) {
+#endif		
 		if (host->mrq) {
 			printk(KERN_ERR "%s: Card removed during transfer!\n",
 				mmc_hostname(host->mmc));
@@ -1378,7 +1462,11 @@ void sdhci_card_detect_callback(struct sdhci_host *host)
 		}
 	}
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 
 	mmc_detect_change(host->mmc, msecs_to_jiffies(200));
 }
@@ -1402,12 +1490,18 @@ static void sdhci_tasklet_card(unsigned long param)
 static void sdhci_tasklet_finish(unsigned long param)
 {
 	struct sdhci_host *host;
+#if !defined CONFIG_MACH_BOSE_ATT
 	unsigned long flags;
+#endif
+
 	struct mmc_request *mrq;
 
 	host = (struct sdhci_host*)param;
-
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
+#endif
 
 	del_timer(&host->timer);
 
@@ -1448,7 +1542,12 @@ static void sdhci_tasklet_finish(unsigned long param)
 #endif
 
 	mmiowb();
+
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 
 	mmc_request_done(host->mmc, mrq);
 }
@@ -1456,11 +1555,17 @@ static void sdhci_tasklet_finish(unsigned long param)
 static void sdhci_timeout_timer(unsigned long data)
 {
 	struct sdhci_host *host;
+#if !defined CONFIG_MACH_BOSE_ATT
 	unsigned long flags;
+#endif
 
 	host = (struct sdhci_host*)data;
 
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 	spin_lock_irqsave(&host->lock, flags);
+#endif
 
 	if (host->mrq) {
 		printk(KERN_ERR "%s: Timeout waiting for hardware "
@@ -1481,7 +1586,11 @@ static void sdhci_timeout_timer(unsigned long data)
 	}
 
 	mmiowb();
+#if defined CONFIG_MACH_BOSE_ATT
+	spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 	spin_unlock_irqrestore(&host->lock, flags);
+#endif
 }
 
 /*****************************************************************************\
@@ -1641,9 +1750,18 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 	u32 intmask;
 	int cardint = 0;
 
+	unsigned int cmd = 0;
+
 	spin_lock(&host->lock);
 
 	intmask = sdhci_readl(host, SDHCI_INT_STATUS);
+
+    /*check error situation*/
+	if (intmask & SDHCI_INT_ERROR_MASK) {
+	   cmd = sdhci_readl(host, SDHCI_COMMAND);
+	   cmd = ((cmd>>24)&0x3f);
+	   printk("[MMC] STATUS = %08x for cmd = %d \n", intmask, cmd);
+		}
 
 	if (!intmask || intmask == 0xffffffff) {
 		result = IRQ_NONE;
@@ -1957,8 +2075,16 @@ int sdhci_add_host(struct sdhci_host *host)
 	if (host->quirks & SDHCI_QUIRK_FORCE_HIGH_SPEED_MODE)
 		mmc->caps |= MMC_CAP_FORCE_HS;
 
+
+#if defined CONFIG_MACH_BOSE_ATT
+	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION) {
+		if(!host->ops->card_detect)
+			mmc->caps |= MMC_CAP_NEEDS_POLL;
+	}
+#else
 	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
 		mmc->caps |= MMC_CAP_NEEDS_POLL;
+#endif
 
 	if (host->quirks & SDHCI_QUIRK_RUNTIME_DISABLE)
 		mmc->caps |= MMC_CAP_DISABLE;
@@ -2107,10 +2233,16 @@ EXPORT_SYMBOL_GPL(sdhci_add_host);
 
 void sdhci_remove_host(struct sdhci_host *host, int dead)
 {
+#if !defined CONFIG_MACH_BOSE_ATT
 	unsigned long flags;
+#endif
 
 	if (dead) {
+#if defined CONFIG_MACH_BOSE_ATT		
+		spin_lock_irqsave(&host->lock, host->spinlock_flags);
+#else
 		spin_lock_irqsave(&host->lock, flags);
+#endif
 
 		host->flags |= SDHCI_DEVICE_DEAD;
 
@@ -2122,7 +2254,11 @@ void sdhci_remove_host(struct sdhci_host *host, int dead)
 			tasklet_schedule(&host->finish_tasklet);
 		}
 
+#if defined CONFIG_MACH_BOSE_ATT		
+		spin_unlock_irqrestore(&host->lock, host->spinlock_flags);
+#else
 		spin_unlock_irqrestore(&host->lock, flags);
+#endif
 	}
 
 	sdhci_disable_card_detection(host);

@@ -614,15 +614,22 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	if (!mmc_host_is_spi(host)) {
 		err = mmc_send_relative_addr(host, &card->rca);
 		if (err)
+#if defined CONFIG_MACH_BOSE_ATT
+			goto free_card;
+#else
 			return err;
-
+#endif
 		mmc_set_bus_mode(host, MMC_BUSMODE_PUSHPULL);
 	}
 
 	if (!oldcard) {
 		err = mmc_sd_get_csd(host, card);
 		if (err)
+#if defined CONFIG_MACH_BOSE_ATT
+			goto free_card;
+#else
 			return err;
+#endif
 
 		mmc_decode_cid(card);
 	}
@@ -633,7 +640,11 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	if (!mmc_host_is_spi(host)) {
 		err = mmc_select_card(card);
 		if (err)
+#if defined CONFIG_MACH_BOSE_ATT
+			goto free_card;
+#else
 			return err;
+#endif
 	}
 
 	err = mmc_sd_setup_card(host, card, oldcard != NULL);
@@ -681,11 +692,18 @@ free_card:
  */
 static void mmc_sd_remove(struct mmc_host *host)
 {
+#if defined CONFIG_MACH_BOSE_ATT
+	if( host && host->card ) {
+		mmc_remove_card(host->card);
+		host->card = NULL;
+	}
+#else
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
 	mmc_remove_card(host->card);
 	host->card = NULL;
+#endif	
 }
 
 /*

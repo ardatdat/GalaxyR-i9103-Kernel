@@ -755,9 +755,12 @@ static void fsa9480_detect_dev(struct fsa9480_usbsw *usbsw)
 		/* Desk Dock */
 		} else if (usbsw->dev2 & DEV_AV) {
 #if (defined(CONFIG_MHL_SWITCH) && defined(CONFIG_MHL_SII9234))	
+
+#ifndef CONFIG_MACH_BOSE_ATT			
 			printk("FSA MHL Detach\n");		
-			
 			FSA9480_MhlSwitchSel(0);
+#endif
+
 #else 
 			if (pdata->deskdock_cb)
 				pdata->deskdock_cb(FSA9480_DETACHED);
@@ -851,7 +854,7 @@ static irqreturn_t fsa9480_irq_thread(int irq, void *data)
 		val2 = intr >> 8;
 		dev_info(&client->dev, "try to read one more time! int1: 0x%x, int2: 0x%x\n", val1, val2);
 	}
-	if(intr == 0) {
+	if(val1 == 0x0) {
 		/* interrupt was fired, but no status bits were set,
 		so device was reset. In this case, the registers were
 		reset to defaults so they need to be reinitialised. */

@@ -30,6 +30,11 @@
 #include <linux/timer.h>
 #include <linux/android_alarm.h>
 
+#if defined(CONFIG_MACH_N1_CHN)
+#include <linux/rtc.h>
+#include <linux/mfd/max8907c.h>
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
+
 #define HWREV_FOR_EXTERNEL_CHARGER	7
 
 #define POLLING_INTERVAL	(30 * 1000)
@@ -962,11 +967,79 @@ static void sec_bat_charging_time_management(struct sec_bat_info *info)
 	return;
 }
 
+#if defined(CONFIG_MACH_N1_CHN)
+
+struct rtc_time current_alarm_time;
+extern int mode_12_24;
+extern void machine_restart(char *cmd);
+extern struct max8907c * info_alarm_boot;
+extern int max8907c_reg_bulk_read(struct i2c_client *i2c, u8 reg, u8 count, u8 *buf);
+extern  int tm_calc(struct rtc_time *tm, u8 *buf, int len);
+extern int data_calc(u8 *buf, struct rtc_time *tm, int len);
+
+static int check_alarm_boot_kernel(void)
+{
+	int ret;
+	u8 data[8];
+	unsigned long time_sec=0, alarm_sec=0;
+	struct rtc_time current_rtc_time;
+	extern unsigned int sec_bat_get_lpcharging_state_check(void);
+	u32 val = sec_bat_get_lpcharging_state_check();
+	
+	printk("check_alarm_boot_kernel : val = %d\n", val);
+
+	//if(val == 1) {
+
+	ret = max8907c_reg_bulk_read(info_alarm_boot->i2c_rtc, MAX8907C_REG_RTC_SEC, 8, data);
+
+	ret = tm_calc(&current_rtc_time, data, 8);
+
+	//ret = max8907c_reg_bulk_read(info_alarm_boot->i2c_rtc, MAX8907C_REG_ALARM1_SEC, 8, data);
+	//ret = tm_calc(&current_alarm_time, data, 8);
+	
+	pr_info("%s current time: %02d:%02d:%02d %02d/%02d/%04d\n",
+		__func__,
+		current_rtc_time.tm_hour, current_rtc_time.tm_min, current_rtc_time.tm_sec,
+		current_rtc_time.tm_mon + 1, current_rtc_time.tm_mday, current_rtc_time.tm_year + 1900);
+
+	pr_info("%s alarm time: %02d:%02d:%02d %02d/%02d/%04d\n",
+		__func__,
+		current_alarm_time.tm_hour, current_alarm_time.tm_min, current_alarm_time.tm_sec,
+		current_alarm_time.tm_mon + 1, current_alarm_time.tm_mday, current_alarm_time.tm_year + 1900);
+		
+	rtc_tm_to_time(&current_rtc_time, &time_sec);
+	rtc_tm_to_time(&current_alarm_time, &alarm_sec);
+
+	pr_info("%s check_alarm_boot_kernel : time_sec = %ld, alarm_sec = %ld : alarm_sec - time_sec =%ld\n",
+		__func__,time_sec, alarm_sec, alarm_sec - time_sec);
+
+	printk("============================================OFF\n");
+	if((time_sec > alarm_sec - 30) && (time_sec < alarm_sec + 5))
+		return 1;
+	//}
+
+	return 0;
+}
+
+#define REBOOT_MODE_NORMAL              2
+extern int write_bootloader_message(char *cmd, int mode);
+extern bool n1_ckech_lpm(void);
+
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 static void sec_bat_monitor_work(struct work_struct *work)
 {
 	struct sec_bat_info *info = container_of(work, struct sec_bat_info,
 			monitor_work);
 	unsigned long flags;
+
+#if defined(CONFIG_MACH_N1_CHN)
+	if(n1_ckech_lpm() && check_alarm_boot_kernel()) {
+		/* When auto power alarm occurs, reboot to idle at LPM charging. */
+		write_bootloader_message("force_to_idle", REBOOT_MODE_NORMAL);
+		printk( "IT_ALARM is 1\n");
+		machine_restart(NULL);
+	}
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 
 	/* TODO: check charging time */
 	sec_bat_charging_time_management(info);
@@ -1263,6 +1336,9 @@ static __devinit int sec_bat_probe(struct platform_device *pdev)
 	struct sec_bat_info *info;
 	int ret = 0;
 
+#if defined(CONFIG_MACH_N1_CHN)
+	u8 alarm_data[8];
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 	dev_info(&pdev->dev, "%s: SEC Battery Driver Loading\n", __func__);
 
 	info = kzalloc(sizeof(*info), GFP_KERNEL);
@@ -1396,6 +1472,14 @@ static __devinit int sec_bat_probe(struct platform_device *pdev)
 	wake_lock(&info->monitor_wake_lock);
 	queue_work(info->monitor_wqueue, &info->monitor_work);
 
+#if defined(CONFIG_MACH_N1_CHN)
+	ret = max8907c_reg_bulk_read(info_alarm_boot->i2c_rtc, MAX8907C_REG_ALARM1_SEC, 8, alarm_data);
+	ret = tm_calc(&current_alarm_time, alarm_data, 8);
+	pr_info("%s alarm time: %02d:%02d:%02d %02d/%02d/%04d\n",
+		__func__,
+		current_alarm_time.tm_hour, current_alarm_time.tm_min, current_alarm_time.tm_sec,
+		current_alarm_time.tm_mon + 1, current_alarm_time.tm_mday, current_alarm_time.tm_year + 1900);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 	return 0;
 
 err_supply_unreg_ac:

@@ -2375,9 +2375,7 @@ static void sd_probe_async(void *data, async_cookie_t cookie)
 	gd->flags = GENHD_FL_EXT_DEVT;
 	if (sdp->removable)
 		gd->flags |= GENHD_FL_REMOVABLE;
-#ifdef CONFIG_MACH_N1
-	msleep(500);
-#endif
+	
 	add_disk(gd);
 	sd_dif_config_host(sdkp);
 

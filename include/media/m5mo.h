@@ -98,6 +98,11 @@ struct m5mo_exif_info {
 	unsigned int info_flash;
 };
 
+#define M5MO_IOCTL_FW_VERSION		_IOW('o', 24, struct m5mo_fw_version)
+struct m5mo_fw_version {
+	char unique_id[7];
+};
+
 enum m5mo_isp_mode {
 	MODE_SYSTEM_INIT = 0,
 	MODE_PARAMETER_SETTING,
@@ -284,8 +289,8 @@ enum m5mo_support_param {
 };
 
 struct m5mo_reg {
-	u16 addr;
-	u16 val;
+	__u16 addr;
+	__u16 val;
 };
 
 struct m5mo_touchaf_pos {
@@ -293,8 +298,8 @@ struct m5mo_touchaf_pos {
 	unsigned int ypos;
 };
 
-int m5mo_write_reg(struct i2c_client *client, u16 addr, u8 val);
-int m5mo_write_reg8(struct i2c_client *client, u8 addr, u8 val);
+int m5mo_write_reg(struct i2c_client *client, __u16 addr, __u8 val);
+int m5mo_write_reg8(struct i2c_client *client, __u8 addr, __u8 val);
 int m5mo_write_table(struct i2c_client *client,
 		const struct m5mo_reg *table,
 		int size);

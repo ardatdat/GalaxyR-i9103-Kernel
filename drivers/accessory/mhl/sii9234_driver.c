@@ -2,7 +2,7 @@
 
 * 
 
-*   SiI9244 - MHL Transmitter Driver
+*   SiI9244 ? MHL Transmitter Driver
 
 *
 
@@ -18,7 +18,7 @@
 
 *
 
-* This program is distributed as is WITHOUT ANY WARRANTY of any
+* This program is distributed ¡°as is¡± WITHOUT ANY WARRANTY of any
 
 * kind, whether express or implied; without even the implied warranty
 
@@ -32,7 +32,7 @@
 
 
 
-/*===========================================================================
+
 
 
                       EDIT HISTORY FOR FILE
@@ -65,6 +65,10 @@ when              who                         what, where, why
 #include <asm/uaccess.h> 
 #include <linux/types.h>
 #include <linux/miscdevice.h>
+
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
+
 
 #include <linux/syscalls.h> 
 #include <linux/fcntl.h> 
@@ -175,6 +179,44 @@ when              who                         what, where, why
 #define		MHL_TX_EVENT_RCPK_RECEIVED	0x05	/* Received an RCPK message */
 #define		MHL_TX_EVENT_RCPE_RECEIVED	0x06	/* Received an RCPE message .*/
 
+/* To use hrtimer*/
+#define	MS_TO_NS(x)	(x * 1000000)
+
+DECLARE_WAIT_QUEUE_HEAD(wake_wq);
+
+static struct hrtimer hr_wake_timer;
+
+static bool wakeup_time_expired;
+
+static bool hrtimer_initialized;
+static bool first_timer;
+
+enum hrtimer_restart hrtimer_wakeup_callback(struct hrtimer *timer)
+{
+	wake_up(&wake_wq);
+	wakeup_time_expired = true;
+//	hrtimer_cancel(&hr_wake_timer);
+	return HRTIMER_NORESTART;
+}
+
+
+void start_hrtimer_ms(unsigned long delay_in_ms)
+{
+	ktime_t ktime;
+	ktime = ktime_set(0, MS_TO_NS(delay_in_ms));
+
+	wakeup_time_expired = false;
+//	hrtimer_init(&hr_wake_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	if (first_timer)
+		first_timer = false;
+	else
+		hrtimer_cancel(&hr_wake_timer);
+
+//	hr_wake_timer.function = &hrtimer_wakeup_callback;
+	hrtimer_start(&hr_wake_timer, ktime, HRTIMER_MODE_REL);
+}
+
+//wait_queue_head_t wake_wq;
 /*===========================================================================
                 
 ===========================================================================*/
@@ -442,7 +484,7 @@ bool SiI9234_init(void)
 {
 	Bool status;
 	printk("# SiI9234 initialization start~ \n");  
-	SiI9234_HW_Reset();	
+	//SiI9234_HW_Reset();	
 	SiiMhlTxInitialize();  
 	return TRUE;
 }
@@ -1119,6 +1161,8 @@ void CbusWakeUpPulseGenerator()
 {	
 	TX_DEBUG_PRINT(("Drv: CbusWakeUpPulseGenerator\n"));
 
+#if 0
+
 	// Start the pulse
 	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) | 0xC0));
 	mdelay(T_SRC_WAKE_PULSE_WIDTH_1-1);	// adjust for code path
@@ -1143,6 +1187,71 @@ void CbusWakeUpPulseGenerator()
 
 	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) & 0x3F));
 	mdelay(T_SRC_WAKE_TO_DISCOVER);
+#else
+	if (!hrtimer_initialized) {
+		hrtimer_init(&hr_wake_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		hr_wake_timer.function = &hrtimer_wakeup_callback;
+		hrtimer_initialized = true;
+		first_timer = true;
+	}
+		
+	//
+	// I2C method
+	//
+	//I2C_WriteByte(SA_TX_Page0_Primary, 0x92, (I2C_ReadByte(SA_TX_Page0_Primary, 0x92) | 0x10));
+
+	// Start the pulse
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) | 0xC0));
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 );	// adjust for code path
+	start_hrtimer_ms(19);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) & 0x3F));
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 );	// adjust for code path
+	start_hrtimer_ms(19);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) | 0xC0));
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 );	// adjust for code path
+	start_hrtimer_ms(19);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) & 0x3F));
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_2 );	// adjust for code path
+	start_hrtimer_ms(60);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) | 0xC0));
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 );	// adjust for code path
+	start_hrtimer_ms(19);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) & 0x3F));
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 );	// adjust for code path
+	start_hrtimer_ms(19);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) | 0xC0));
+	//DelayMS(21);
+//	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 );	// adjust for code path
+	start_hrtimer_ms(19);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	I2C_WriteByte(SA_TX_Page0_Primary, 0x96, (I2C_ReadByte(SA_TX_Page0_Primary, 0x96) & 0x3F));
+
+//	DelayMS(T_SRC_WAKE_TO_DISCOVER);
+	start_hrtimer_ms(T_SRC_WAKE_TO_DISCOVER);
+	wait_event_interruptible(wake_wq, wakeup_time_expired);
+
+	//
+	// Toggle MHL discovery bit
+	// 
+	//I2C_WriteByte(SA_TX_Page0_Primary, 0x92, (I2C_ReadByte(SA_TX_Page0_Primary, 0x92) & 0xEF));
+
+	//DISABLE_DISCOVERY;
+	//ENABLE_DISCOVERY;
+#endif
+	
 }
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -1220,7 +1329,8 @@ void	ProcessRgnd( void )
 		//3355
 		CLR_BIT(SA_TX_Page0_Primary, 0x95, 5);
 		mhl_cable_status =MHL_INIT_POWER_OFF;
-		TX_DEBUG_PRINT((KERN_ERR "MHL_SEL to 0\n")); 
+		TX_DEBUG_PRINT((KERN_ERR "MHL_SEL to 0\n"));
+		//FSA9480_MhlSwitchSel(0); 
 		FSA9480_CheckAndHookAudioDock(); //Rajucm: Audio Dock Detection Algorithm	R1
 	}
 	else 	
@@ -1231,6 +1341,7 @@ void	ProcessRgnd( void )
 			TX_DEBUG_PRINT(("MHL 2K\n"));
 			mhl_cable_status =MHL_TV_OFF_CABLE_CONNECT;
 			printk(KERN_ERR "MHL Connection Fail Power off ###1\n");
+			//FSA9480_MhlSwitchSel(0); 
 			FSA9480_MhlTvOff();//Rajucm: Mhl cable handling when TV Off 	
 			return ;
 		}
@@ -1446,6 +1557,13 @@ static	void	Int4Isr( void )
 
 	if(reg74 & BIT_2) // MHL_EST_INT
 	{
+		/*	
+		if((I2C_ReadByte(SA_TX_Page0_Primary, 0x09) & BIT_2) == 0x00) {
+			printk(KERN_ERR "[MHL] RSEN is low - status incorrect\n");
+			FSA9480_MhlSwitchSel(0);//3355
+			return;
+		}
+		*/ //dshadow
 		MASK_CBUS1_INTERRUPTS; 
 		MASK_CBUS2_INTERRUPTS;
 		MhlTxDrvProcessConnection(); 
@@ -1458,7 +1576,7 @@ static	void	Int4Isr( void )
 		{
 			mhl_cable_status =MHL_TV_OFF_CABLE_CONNECT;
 			printk(KERN_ERR "MHL Connection Fail Power off ###2\n");
-
+			//FSA9480_MhlSwitchSel(0); 
 			//3355
 			if(mhl_vbus == true)
 			{          

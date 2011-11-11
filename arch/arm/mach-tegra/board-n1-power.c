@@ -461,14 +461,14 @@ int __init n1_regulator_init(void)
 	extern int charging_mode_from_boot;
 
 	if (!charging_mode_from_boot) {
-		n1_suspend_data.wake_enb |= (TEGRA_WAKE_GPIO_PW2 | TEGRA_WAKE_GPIO_PV2);
+		n1_suspend_data.wake_enb |= (TEGRA_WAKE_GPIO_PW2 | TEGRA_WAKE_GPIO_PV2 | TEGRA_WAKE_GPIO_PW3 | TEGRA_WAKE_GPIO_PV3);
 		n1_suspend_data.wake_low |= TEGRA_WAKE_GPIO_PW2;
-		n1_suspend_data.wake_any |= TEGRA_WAKE_GPIO_PV2;
+		n1_suspend_data.wake_any |= (TEGRA_WAKE_GPIO_PV2 | TEGRA_WAKE_GPIO_PW3 | TEGRA_WAKE_GPIO_PV3);
 	}
 #else
-	n1_suspend_data.wake_enb |= (TEGRA_WAKE_GPIO_PW2 | TEGRA_WAKE_GPIO_PV2);
+	n1_suspend_data.wake_enb |= (TEGRA_WAKE_GPIO_PW2 | TEGRA_WAKE_GPIO_PV2 | TEGRA_WAKE_GPIO_PW3 | TEGRA_WAKE_GPIO_PV3);
 	n1_suspend_data.wake_low |= TEGRA_WAKE_GPIO_PW2;
-	n1_suspend_data.wake_any |= TEGRA_WAKE_GPIO_PV2;
+	n1_suspend_data.wake_any |= (TEGRA_WAKE_GPIO_PV2 | TEGRA_WAKE_GPIO_PW3 | TEGRA_WAKE_GPIO_PV3);
 #endif
 
 	regulator_has_full_constraints();

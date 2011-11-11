@@ -38,6 +38,13 @@
 #define SDHCI_VENDOR_CLOCK_CNTRL       0x100
 #define SDHCI_TEGRA_MIN_CONTROLLER_CLOCK	12000000
 
+#ifdef CONFIG_MACH_BOSE_ATT
+#include <linux/mfd/stmpe.h>
+#endif
+#ifdef CONFIG_MACH_BOSE_ATT
+extern struct stmpe *g_stmpe;
+extern int stmpe_reg_read(struct stmpe *stmpe, u8 reg);
+#endif
 
 #ifdef CONFIG_MACH_N1
 /* FIXME N1 Device Specific */
@@ -58,14 +65,36 @@ struct tegra_sdhci_host {
 	int clk_enabled;
 	bool card_always_on;
 	u32 sdhci_ints;
+#if defined CONFIG_MACH_BOSE_ATT
+	int cd_gpio;
+	int cd_gpio_polarity;
+#endif	
 	int wp_gpio;
+#if defined CONFIG_MACH_BOSE_ATT
+	int card_present;
+	unsigned int acquire_spinlock;
+#endif
 };
 
 #if defined CONFIG_MACH_BOSE_ATT
 irqreturn_t external_carddetect_irq()
 {
-	if (card_sdhost)
+	struct tegra_sdhci_host *host = sdhci_priv(card_sdhost);
+	if (card_sdhost) {
+		if (stmpe_reg_read(g_stmpe,0x17) & 0x80) {
+			printk(KERN_ERR "sdhci-tegra: card removed.\n");
+			mmc_host_sd_clear_present(card_sdhost->mmc);
+			host->card_present = 0;
+		} else {
+			printk(KERN_ERR "sdhci-tegra: card inserted.\n");
+			mmc_host_sd_set_present(card_sdhost->mmc);
+			host->card_present = 1;
+		}
+		printk(KERN_DEBUG "sdhci-tegra: card present state=0x%x.\n",
+				mmc_host_sd_present(card_sdhost->mmc));
+
 		tasklet_schedule(&card_sdhost->card_tasklet);
+	}
 	return IRQ_HANDLED;
 }
 #endif 
@@ -74,9 +103,59 @@ static irqreturn_t carddetect_irq(int irq, void *data)
 {
 	struct sdhci_host *sdhost = (struct sdhci_host *)data;
 
+#if defined CONFIG_MACH_BOSE_ATT
+	struct tegra_sdhci_host *host = sdhci_priv(sdhost);
+	unsigned int present;
+
+	present = (gpio_get_value(host->cd_gpio) == host->cd_gpio_polarity);
+
+	if( present != host->card_present)
+	{
+//		printk(KERN_ERR"%s, card present is %d\n",__func__,present);
+		host->card_present = present;
+		if (present) {
+			printk(KERN_ERR "sdhci-tegra: card inserted.\n");
+			mmc_host_sd_set_present(sdhost->mmc);
+		} else {
+			printk(KERN_ERR "sdhci-tegra: card removed.\n");
+			mmc_host_sd_clear_present(sdhost->mmc);
+		}
+	}	
+	else
+		return IRQ_HANDLED;
+#endif
+
 	tasklet_schedule(&sdhost->card_tasklet);
 	return IRQ_HANDLED;
 };
+
+#if defined CONFIG_MACH_BOSE_ATT
+static void tegra_sdhci_update_card_detection(struct sdhci_host *sdhci)
+{
+	struct tegra_sdhci_host *host = sdhci_priv(sdhci);
+	unsigned int present;
+
+	if(host->cd_gpio != -1 )
+	{
+		if (card_sdhost) {
+			if (stmpe_reg_read(g_stmpe,0x17) & 0x80)
+				host->card_present = 0;
+			else
+				host->card_present = 1;
+
+			tasklet_schedule(&card_sdhost->card_tasklet);
+		} else {
+			present = (gpio_get_value(host->cd_gpio) == host->cd_gpio_polarity);
+
+			if( present != host->card_present )
+			{
+				host->card_present = present;
+				tasklet_schedule(&sdhci->card_tasklet);
+			}
+		}
+	}
+}
+#endif
 
 static void tegra_sdhci_status_notify_cb(int card_present, void *dev_id)
 {
@@ -94,6 +173,13 @@ static int tegra_sdhci_enable_dma(struct sdhci_host *host)
 static void tegra_sdhci_enable_clock(struct tegra_sdhci_host *host, int clock)
 {
 	u8 val;
+
+#if defined CONFIG_MACH_BOSE_ATT
+	if( spin_is_locked(&host->sdhci->lock)){
+		spin_unlock_irqrestore(&host->sdhci->lock,host->sdhci->spinlock_flags);
+		host->acquire_spinlock = 1;
+	}
+#endif
 	
 	if (clock) {
 		if (!host->clk_enabled) {
@@ -112,9 +198,25 @@ static void tegra_sdhci_enable_clock(struct tegra_sdhci_host *host, int clock)
 		val &= ~(0x1);
 		sdhci_writeb(host->sdhci, val, SDHCI_VENDOR_CLOCK_CNTRL);
 
+#if defined CONFIG_MACH_BOSE_ATT
+/*
+ *	Read back the register to ensure all writes on AHB are flushed prior 
+ *	to switching OFF the clock
+ */
+ 		val = sdhci_readb(host->sdhci, SDHCI_VENDOR_CLOCK_CNTRL);
+#endif
 		clk_disable(host->clk);
 		host->clk_enabled = 0;
 	}
+
+#if defined CONFIG_MACH_BOSE_ATT
+	if( host->acquire_spinlock){
+		spin_lock_irqsave(&host->sdhci->lock, host->sdhci->spinlock_flags);
+		host->acquire_spinlock = 0;
+	}
+#endif
+
+	
 	if (host->clk_enabled)
 		host->sdhci->max_clk = clk_get_rate(host->clk);
 	else
@@ -130,6 +232,15 @@ static void tegra_sdhci_set_clock(struct sdhci_host *sdhci, unsigned int clock)
 
 	tegra_sdhci_enable_clock(host, clock);
 }
+
+#if defined CONFIG_MACH_BOSE_ATT
+static int tegra_sdhci_card_detect(struct sdhci_host *sdhost)
+{
+	struct tegra_sdhci_host *host = sdhci_priv(sdhost);
+
+	return host->card_present;
+}
+#endif
 
 #ifdef CONFIG_MACH_N1
 void tegra_sdhci_force_presence_change()
@@ -165,6 +276,9 @@ static struct sdhci_ops tegra_sdhci_ops = {
 	.enable_dma = tegra_sdhci_enable_dma,
 	.set_clock = tegra_sdhci_set_clock,
 	.get_ro = tegra_sdhci_get_ro,
+#if defined CONFIG_MACH_BOSE_ATT
+	.card_detect = tegra_sdhci_card_detect,
+#endif
 };
 
 static int __devinit tegra_sdhci_probe(struct platform_device *pdev)
@@ -202,7 +316,15 @@ static int __devinit tegra_sdhci_probe(struct platform_device *pdev)
 	host = sdhci_priv(sdhci);
 	host->sdhci = sdhci;
 	host->card_always_on = (plat->power_gpio == -1) ? 1 : 0;
+#if defined CONFIG_MACH_BOSE_ATT
+	host->cd_gpio = plat->cd_gpio;
+	host->cd_gpio_polarity = plat->cd_gpio_polarity;
+#endif
 	host->wp_gpio = plat->wp_gpio;
+
+#if defined CONFIG_MACH_BOSE_ATT
+	host->acquire_spinlock = 0;
+#endif
 
 	host->clk = clk_get(&pdev->dev, plat->clk_id);
 	if (IS_ERR(host->clk)) {
@@ -229,7 +351,12 @@ static int __devinit tegra_sdhci_probe(struct platform_device *pdev)
 			SDHCI_QUIRK_8_BIT_DATA |
 			SDHCI_QUIRK_NO_VERSION_REG |
 			SDHCI_QUIRK_BROKEN_ADMA_ZEROLEN_DESC |
+#if defined CONFIG_MACH_BOSE_ATT
+			SDHCI_QUIRK_RUNTIME_DISABLE|
+			SDHCI_QUIRK_BROKEN_CARD_DETECTION;
+#else
 			SDHCI_QUIRK_RUNTIME_DISABLE;
+#endif
 
 	if (plat->force_hs != 0)
 		sdhci->quirks |= SDHCI_QUIRK_FORCE_HIGH_SPEED_MODE;
@@ -244,10 +371,27 @@ static int __devinit tegra_sdhci_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, host);
 
+#if defined CONFIG_MACH_BOSE_ATT
+	/*
+	  *	If the card detect gpio is not present, treat the card as non-removable
+	  */
+	  if( plat->cd_gpio == -1 )
+	  	host->card_present = 1;
+
+#endif
+
 	if (plat->cd_gpio != -1) {
+#ifdef CONFIG_MACH_BOSE_ATT
+		mmc_host_sd_set_present(sdhci->mmc);
+#endif
+
 #if defined CONFIG_MACH_BOSE_ATT
 		if (plat->cd_gpio ==0xffff) {
 			card_sdhost = sdhci;		
+			if (stmpe_reg_read(g_stmpe,0x17) & 0x80)
+				host->card_present = 0;
+			else
+				host->card_present = 1;
 		}
 		else {
 #endif
@@ -258,6 +402,7 @@ static int __devinit tegra_sdhci_probe(struct platform_device *pdev)
 			if (rc)
 				goto err_remove_host;
 #if defined CONFIG_MACH_BOSE_ATT
+			host->card_present = ( gpio_get_value(plat->cd_gpio) == host->cd_gpio_polarity);
 		}	
 #endif
 	} else if (plat->register_status_notify) {
@@ -451,10 +596,14 @@ static int tegra_sdhci_resume(struct platform_device *pdev)
 
 
 	tegra_sdhci_enable_clock(host, SDHCI_TEGRA_MIN_CONTROLLER_CLOCK);
+	mdelay(10);
 	ret = sdhci_resume_host(host->sdhci);
 	if (ret)
 		pr_err("%s: failed, error = %d\n", __func__, ret);
 
+#if defined CONFIG_MACH_BOSE_ATT
+	tegra_sdhci_update_card_detection(host->sdhci);
+#endif
 	return ret;
 }
 #else

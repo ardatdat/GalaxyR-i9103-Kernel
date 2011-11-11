@@ -5561,6 +5561,7 @@ static long s5k4ecgx_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 
 	if(dtpTest == S5K4ECGX_DTP_TEST_ON) {
     	    if( ( cmd != S5K4ECGX_IOCTL_SET_MODE ) &&
+		( cmd != S5K4ECGX_IOCTL_CAM_MODE ) &&
 		( cmd != S5K4ECGX_IOCTL_DTP_TEST ) ) {
 			printk(KERN_ERR "func(%s):line(%d)S5K4ECGX_DTP_TEST_ON. cmd(%d)\n",__func__,__LINE__, cmd);
 			return 0;

@@ -75,6 +75,10 @@ ktime_t alarm_get_elapsed_realtime(void);
 /* set rtc while preserving elapsed realtime */
 int alarm_set_rtc(const struct timespec ts);
 
+#if defined(CONFIG_MACH_N1_CHN)
+int alarm_set_alarm(char * alarm_data);
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
+
 #endif
 
 enum android_alarm_return_flags {
@@ -100,6 +104,9 @@ enum android_alarm_return_flags {
 #define ANDROID_ALARM_SET_AND_WAIT(type)    ALARM_IOW(3, type, struct timespec)
 #define ANDROID_ALARM_GET_TIME(type)        ALARM_IOW(4, type, struct timespec)
 #define ANDROID_ALARM_SET_RTC               _IOW('a', 5, struct timespec)
+#if defined(CONFIG_MACH_N1_CHN)
+#define ANDROID_ALARM_SET_ALARM          _IOW('a', 7, struct timespec)
+#endif /*--  CHN feature - power_on_alarm_bsystar --*/
 #define ANDROID_ALARM_BASE_CMD(cmd)         (cmd & ~(_IOC(0, 0, 0xf0, 0)))
 #define ANDROID_ALARM_IOCTL_TO_TYPE(cmd)    (_IOC_NR(cmd) >> 4)
 

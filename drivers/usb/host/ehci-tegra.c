@@ -29,6 +29,9 @@
 #endif
 #endif
 #include <mach/iomap.h>
+#ifdef CONFIG_USB_EHCI_ONOFF_FEATURE
+#include <linux/pm_runtime.h>
+#endif
 
 #define TEGRA_USB_USBCMD_REG_OFFSET		0x140
 #define TEGRA_USB_USBCMD_RESET			(1 << 1)
@@ -399,6 +402,10 @@ static void tegra_ehci_restart(struct usb_hcd *hcd)
 	ehci_writel(ehci, INTR_MASK, &ehci->regs->intr_enable);
 }
 
+#ifdef CONFIG_MACH_N1
+static int shutdown = 0;
+#endif
+
 static int tegra_usb_suspend(struct usb_hcd *hcd)
 {
 	struct tegra_ehci_hcd *tegra = dev_get_drvdata(hcd->self.controller);
@@ -424,6 +431,10 @@ static int tegra_usb_suspend(struct usb_hcd *hcd)
 
 	spin_unlock_irqrestore(&tegra->ehci->lock, flags);
 
+#ifdef CONFIG_MACH_N1
+	if (tegra->phy->instance == 1 && shutdown == 1)
+		return 0;
+#endif
 	tegra_ehci_power_down(hcd);
 	return 0;
 }
@@ -600,12 +611,15 @@ static void tegra_ehci_shutdown(struct usb_hcd *hcd)
 
 	/* ehci_shutdown touches the USB controller registers, make sure
 	 * controller has clocks to it */
+#ifdef CONFIG_MACH_N1	 
+	if (tegra->phy->instance == 1)
+		shutdown = 1;
+#endif
+
 	if (!tegra->host_resumed)
 		tegra_ehci_power_up(hcd);
-	printk("tegra_ehci_power_up\n");
 
 	ehci_shutdown(hcd);
-	printk("ehci_shutdown\n");
 
 	/* we are ready to shut down, powerdown the phy */
 	tegra_ehci_power_down(hcd);
@@ -663,6 +677,17 @@ static int tegra_ehci_bus_suspend(struct usb_hcd *hcd)
 {
 	int ret = 0;
 	struct tegra_ehci_hcd *tegra = dev_get_drvdata(hcd->self.controller);
+
+#ifdef CONFIG_MACH_N1
+	printk(KERN_INFO "%s %d\n", __func__, __LINE__);
+
+	if (tegra->phy->instance == 1) {
+		if (shutdown == 1) {
+			printk(KERN_INFO "%s %d, return by shutdown\n", __func__, __LINE__);
+			return ret;
+		}
+	}
+#endif
 
 	if (0 != (ret = ehci_bus_suspend(hcd)))
 		return ret;
@@ -846,6 +871,7 @@ static ssize_t store_ehci_power(struct device *dev,
 	int retval;
 	struct tegra_ehci_hcd *tegra = dev_get_drvdata(dev);
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
+	struct usb_device *udev;
 
 	if (sscanf(buf, "%d", &power_on) != 1)
 		return -EINVAL;
@@ -854,6 +880,18 @@ static ssize_t store_ehci_power(struct device *dev,
 		return -EBUSY;
 #endif
 	if (power_on == 0 && ehci_handle != NULL) {
+		/* disable root_hub autosuspend
+		*
+		* At usb_remove_hcd, root_hub ptr is disappeared
+		* and set to NULL.
+		* 'autosuspend_check' call during remove hcd makes panic.
+		*
+		*/
+		udev = hcd->self.root_hub;
+		if (udev) {
+			usb_disable_autosuspend(udev);
+			usleep_range(5000, 10000);
+		}
 		usb_remove_hcd(hcd);
 		tegra_ehci_power_down(hcd);
 		ehci_handle = NULL;
@@ -869,6 +907,7 @@ static ssize_t store_ehci_power(struct device *dev,
 		if (retval < 0) {
 			printk(KERN_ERR "power_on error\n");
 			count = retval;
+			tegra_ehci_power_down(hcd);
 			ehci_handle = NULL;
 		} else
 			ehci_handle = hcd;
@@ -1255,7 +1294,10 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 
 	if (time_before(jiffies, tegra->ehci->next_statechange))
 		msleep(10);
-
+#ifdef CONFIG_MACH_N1
+	if (tegra->phy->instance == 1 && shutdown == 1)
+		return 0;
+#endif
 	return tegra_usb_suspend(hcd);
 }
 #endif
@@ -1315,12 +1357,8 @@ static void tegra_ehci_hcd_shutdown(struct platform_device *pdev)
 	struct tegra_ehci_hcd *tegra = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
 
-	printk(KERN_EMERG "%s(%d) +\n", __func__, __LINE__);
-	
 	if (hcd->driver->shutdown)
 		hcd->driver->shutdown(hcd);
-		
-	printk(KERN_EMERG "%s(%d) -\n", __func__, __LINE__);
 }
 
 static struct platform_driver tegra_ehci_driver = {

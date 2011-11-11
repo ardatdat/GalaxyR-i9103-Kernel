@@ -139,7 +139,7 @@ u16* cmc623_values[]=
 	cmc623_Video_LCD,
 	
 	cmc623_Video_CABC_LCD,
-
+	
 	cmc623_Video_Warm_LCD,
 	
 	cmc623_Video_Warm_CABC_LCD,

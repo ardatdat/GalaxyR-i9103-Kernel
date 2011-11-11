@@ -84,6 +84,24 @@ static const struct str_smd_gpio g_gpio[SMD_GPIO_MAX] = {
 int usb_runtime_pm_ap_initiated_L2 = 1;
 EXPORT_SYMBOL(usb_runtime_pm_ap_initiated_L2);
 
+void smdctl_retry_reset_count(bool retry)
+{
+	if(retry)
+		atomic_inc(&gsmdctl->reset_retry_count);
+	else
+		atomic_set(&gsmdctl->reset_retry_count, 0);
+	pr_info("modem uevent reset retry = %d\n",
+				atomic_read(&gsmdctl->reset_retry_count));
+#ifdef CONFIG_KERNEL_DEBUG_SEC
+	if (atomic_read(&gsmdctl->reset_retry_count) > 20) {
+		kernel_sec_hw_reset(true);
+		//emergency_restart();
+		kernel_restart(NULL);
+	}
+#endif
+}
+EXPORT_SYMBOL(smdctl_retry_reset_count);
+
 int smdctl_set_pm_status(unsigned int status)
 {
 	/* this function should be protected by semaphore/atomic value */
@@ -220,6 +238,7 @@ static void smd_cp_active_worker(struct work_struct *work)
 		kobject_uevent_env(&smdctl->dev->kobj,
 					KOBJ_OFFLINE, smdctl->uevent_envs);
 		pr_err("smd: sent uevnet(%s)\n", smdctl->uevent_envs[0]);
+		smdctl_retry_reset_count(true);
 	}
 }
 
@@ -290,6 +309,7 @@ void smdctl_request_connection_recover(bool reconnection)
 		gsmdctl->uevent_envs[0] ="MAILBOX=cp_reset";
 		kobject_uevent_env(&gsmdctl->dev->kobj, KOBJ_OFFLINE,
 							gsmdctl->uevent_envs);
+		smdctl_retry_reset_count(true);
 	} else {
 		gsmdctl->modem_uevent_requested = false;
 
@@ -320,6 +340,7 @@ static void smd_modem_reset_worker(struct work_struct *work)
 							smdctl->uevent_envs);
 	if (retval != 0)
 		pr_err("Error: kobject_uevent %d\n", retval);
+	smdctl_retry_reset_count(true);
 
 	/* guide time to modem boot */
 	wake_lock_timeout(&smdctl->ctl_wake_lock, HZ*20);
@@ -339,6 +360,7 @@ static void smd_request_uevent(struct str_smdctl *smdctl)
 		if (retval != 0)
 			pr_err("Error: kobject_uevent %d\n",
 				retval);
+		smdctl_retry_reset_count(true);
 		/* guide time to modem boot */
 		wake_lock_timeout(&smdctl->ctl_wake_lock,
 				HZ*20);
@@ -663,6 +685,31 @@ static int xmm6260_on(struct str_smdctl *smdctl)
 	return 0;
 }
 
+static int xmm6260_reset(struct str_smdctl *smdctl)
+{
+	int ret;
+	struct str_ctl_gpio *gpio = smdctl->gpio;
+	if (!gpio) {
+		pr_err("%s:gpio not allocated\n", __func__);
+		return -EINVAL;
+	}
+	pr_info("%s Start\n", __func__);
+
+	/* set low AP-CP GPIO befor warm reset */
+	gpio_set_value(gpio[SMD_GPIO_CP_ACT].num, LOW);
+	gpio_set_value(gpio[SMD_GPIO_HSIC_ACT].num, LOW);
+	gpio_set_value(gpio[SMD_GPIO_HSIC_SUS].num, LOW);
+	msleep(100);
+
+	pr_info("cp warm reset\n");
+	gpio_set_value(gpio[SMD_GPIO_CP_REQ].num, LOW);
+	msleep(10);
+	gpio_set_value(gpio[SMD_GPIO_CP_RST].num, HIGH);
+	usleep_range(160, 1000);
+	gpio_set_value(gpio[SMD_GPIO_CP_REQ].num, HIGH);
+	return 0;
+}
+
 #ifdef CONFIG_KERNEL_DEBUG_SEC
 /*
  * HSIC CP uploas scenario -
@@ -773,6 +820,11 @@ static long smdctl_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 		break;
 
+	case IOCTL_CP_RESET:
+		pr_info("IOCTL_CP_RESET\n");
+		xmm6260_reset(smdctl);
+		break;	
+
 	case IOCTL_ON_HSIC_ACT:
 		pr_info("IOCTL_ON_HSIC_ACT\n");
 		gpio_set_value(gpio[SMD_GPIO_HSIC_ACT].num, HIGH);
@@ -866,6 +918,7 @@ static int register_smdctl_dev(struct str_smdctl *smdctl)
 	}
 
 	atomic_set(&smdctl->refcount, 0);
+	atomic_set(&smdctl->reset_retry_count, 0);
 	smdctl->cp_stat = CP_PWR_OFF;
 	dev_set_drvdata(smdctl->dev, smdctl);
 
