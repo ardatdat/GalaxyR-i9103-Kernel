@@ -335,8 +335,8 @@ MODFLAGS	= -march=armv7-a -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -ffa
 CFLAGS_MODULE   = -Wno-array-bounds -mtune=cortex-a9 -mfpu=vfpv3-d16 -O2
 AFLAGS_MODULE   = $(MODFLAGS)
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= $(MODFLAGS)
-AFLAGS_KERNEL	= $(MODFLAGS)
+CFLAGS_KERNEL	= -O2 $(MODFLAGS)
+AFLAGS_KERNEL	= -O2 $(MODFLAGS)
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
