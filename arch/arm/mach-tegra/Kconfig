@@ -166,3 +166,29 @@ config TEGRA_CPU_FREQ_LOCK
 	  frequency with specific value. Once CPU frequency locked,
 	  CPU DVFS works but DVFS requested frequency doesn't go below
 	  the locked frequency.
+
+config TEGRA_CPU_FREQ_SET_MIN_MAX
+        bool "Set Min/Max CPU frequencies."
+	depends on CPU_FREQ
+        default n
+        help
+          Allow setting min and max CPU frequencies. Sysfs can be used
+          to override these values.
+
+config TEGRA_CPU_FREQ_MAX
+        int "Max CPU Frequency"
+        depends on TEGRA_CPU_FREQ_SET_MIN_MAX
+        default 1000000
+
+config TEGRA_CPU_FREQ_MIN
+        int "Min CPU Frequency"
+        depends on TEGRA_CPU_FREQ_SET_MIN_MAX
+        default 216000
+
+config DISABLE_3D_POWERGATING
+	bool "Disable 3D power gate"
+	depends on ARCH_TEGRA_2x_SOC
+	help
+	  This is for silicon errata of 3D power gating. By setting this
+	  config, 3D power will never be gated.	  
+
