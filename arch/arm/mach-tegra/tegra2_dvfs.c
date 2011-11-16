@@ -46,11 +46,11 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 
 static const int cpu_speedo_nominal_millivolts[] =
 /* spedo_id  0,    1,    2 */
-	{ 1100, 1025, 1125 };
+	{ 1100, 1050, 1125 };
 
 static const int core_speedo_nominal_millivolts[] =
 /* spedo_id  0,    1,    2 */
-	{ 1225, 1225, 1300 };
+	{ 1225, 1275, 1300 };
 
 static struct dvfs_rail tegra2_dvfs_rail_vdd_cpu = {
 	.reg_id = "vdd_cpu",

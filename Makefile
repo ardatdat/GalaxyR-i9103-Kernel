@@ -331,12 +331,12 @@ CHECK		= sparse
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-MODFLAGS	= -march=armv7-a -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math -fsingle-precision-constant
-CFLAGS_MODULE   = -Wno-array-bounds -mtune=cortex-a9 -mfpu=vfpv3-d16 -O2
-AFLAGS_MODULE   = $(MODFLAGS)
+MODFLAGS	= -Os -march=armv7-a -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math -fsingle-precision-constant
+CFLAGS_MODULE   = -Os -Wno-array-bounds -mtune=cortex-a9 -mfpu=vfpv3-d16
+AFLAGS_MODULE   = -Os
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= $(MODFLAGS)
-AFLAGS_KERNEL	= $(MODFLAGS)
+CFLAGS_KERNEL	= -Os
+AFLAGS_KERNEL	= -Os
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
