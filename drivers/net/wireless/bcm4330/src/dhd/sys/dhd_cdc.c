@@ -576,7 +576,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	uint32 glom = 0;
 	uint bcn_timeout = 12;
 	int arpoe = 1;
-	int arp_ol = 0xf;
+	int arp_ol = 0xb; /* Set arp_ol 0xb */
 	int scan_assoc_time = 40;
 	int scan_unassoc_time = 80;
 	int assoc_retry = 3;

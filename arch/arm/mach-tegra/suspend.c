@@ -732,6 +732,7 @@ void tegra_ahbgizmo_resume(void)
 
 #ifdef CONFIG_MACH_N1
 extern int Is_call_active(void);
+extern int Is_proximitysensor_active(void);
 #endif
 static int tegra_suspend_enter(suspend_state_t state)
 {
@@ -754,7 +755,7 @@ static int tegra_suspend_enter(suspend_state_t state)
 
 #ifdef CONFIG_MACH_N1
 	/* Set LP2 for audio path when the device is in call */
-	if (Is_call_active() || !gpio_get_value(GPIO_ALC_INT)) {
+	if (Is_call_active() || !gpio_get_value(GPIO_ALC_INT) || Is_proximitysensor_active()) {
 		do_lp0 = 0;
 		do_lp1 = 1;
 		do_lp2 = 0;

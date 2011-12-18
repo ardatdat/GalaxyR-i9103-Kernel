@@ -93,18 +93,17 @@ int read_accel_raw_xyz(struct acc_data *acc)
 	{
 #ifdef CONFIG_MACH_BOSE_ATT
 		if (system_rev<=7)
-			if(sensor_i2c_read(this_client->adapter, 0x30>>1, 0x00, 6, acc_data) != 0) return -1;
+			sensor_i2c_read(this_client->adapter, 0x30>>1, 0x00, 6, acc_data);
 		else
-			if(sensor_i2c_read(this_client->adapter, 0x0F, 0x06, 6, acc_data) != 0) return -1;
+			sensor_i2c_read(this_client->adapter, 0x0F, 0x06, 6, acc_data);
 #else
-			if(sensor_i2c_read(this_client->adapter, 0x0F, 0x06, 6, acc_data) != 0) return -1;
+		sensor_i2c_read(this_client->adapter, 0x0F, 0x06, 6, acc_data);
 #endif
 
 	}
-  	else if(mldl_cfg->dmp_is_running && 
-          mldl_cfg->accel_is_suspended==0) {
+  	else if(mldl_cfg->dmp_is_running && mldl_cfg->accel_is_suspended==0) {
 
-		if(sensor_i2c_read(this_client->adapter, DEFAULT_MPU_SLAVEADDR, 0x23, 6, acc_data) != 0) return -1;
+		sensor_i2c_read(this_client->adapter, DEFAULT_MPU_SLAVEADDR, 0x23, 6, acc_data);
       		
   	}
 	else return -1;
@@ -999,8 +998,6 @@ void mpu3050_early_suspend(struct early_suspend *h)
 	pressure_adapter =
 	    i2c_get_adapter(mldl_cfg->pdata->pressure.adapt_num);
 
-	get_MPUReg(mldl_cfg, this_client->adapter);
-
 	dev_dbg(&this_client->adapter->dev, "%s: %d, %d\n", __func__,
 		h->level, mpu->mldl_cfg.gyro_is_suspended);
 	if (MPU3050_EARLY_SUSPEND_IN_DRIVER)
@@ -1083,8 +1080,6 @@ int mpu_suspend(struct i2c_client *client, pm_message_t mesg)
 	    i2c_get_adapter(mldl_cfg->pdata->compass.adapt_num);
 	pressure_adapter =
 	    i2c_get_adapter(mldl_cfg->pdata->pressure.adapt_num);
-
-	get_MPUReg(mldl_cfg, this_client->adapter);
 
 	if (!mpu->mldl_cfg.gyro_is_suspended) {
 		dev_dbg(&this_client->adapter->dev,
@@ -1521,6 +1516,10 @@ int mpu3050_test_gyro(struct i2c_client *client, short gyro_biases[3],
         printk("Temperature   : %+13d %13s %13s (deg. C)\n",
             SHORT_TO_TEMP_C(temperature), "", "");
 
+	kfree(x);
+	kfree(y);
+	kfree(z);
+	
     /* load into final storage */
     *temp_avg = (short)temperature;
     gyro_biases[X] = (short)Avg[X];

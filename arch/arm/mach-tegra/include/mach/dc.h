@@ -388,4 +388,6 @@ struct tegra_dc_pwm_params {
 
 void tegra_dc_config_pwm(struct tegra_dc *dc, struct tegra_dc_pwm_params *cfg);
 
+void tegra_dc_data_out(struct tegra_dc *dc);
+
 #endif

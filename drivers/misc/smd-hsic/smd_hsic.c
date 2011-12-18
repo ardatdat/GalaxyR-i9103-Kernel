@@ -939,7 +939,7 @@ void add_head_txurb(struct list_head *list, struct urb *urb)
 {
 	unsigned long flags;
 	struct smd_usbdev *usbdev = &g_usbdev;
-	
+
 	spin_lock_irqsave(&usbdev->lock, flags);
 	list_add(&urb->urb_list, list);
 	spin_unlock_irqrestore(&usbdev->lock, flags);

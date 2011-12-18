@@ -1283,6 +1283,10 @@ static int tegra_ehci_resume(struct platform_device *pdev)
 {
 	struct tegra_ehci_hcd *tegra = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
+#if defined (CONFIG_MACH_N1) && defined (CONFIG_USB_EHCI_ONOFF_FEATURE)
+	if (tegra->phy->instance == 1 && !ehci_handle)
+		return 0;
+#endif
 
 	return tegra_usb_resume(hcd);
 }
@@ -1294,8 +1298,10 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 
 	if (time_before(jiffies, tegra->ehci->next_statechange))
 		msleep(10);
-#ifdef CONFIG_MACH_N1
+#if defined (CONFIG_MACH_N1) && defined (CONFIG_USB_EHCI_ONOFF_FEATURE)
 	if (tegra->phy->instance == 1 && shutdown == 1)
+		return 0;
+	if (tegra->phy->instance == 1 && !ehci_handle)
 		return 0;
 #endif
 	return tegra_usb_suspend(hcd);

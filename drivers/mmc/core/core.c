@@ -1480,6 +1480,9 @@ void mmc_rescan(struct work_struct *work)
 
 	if (host->rescan_disable) {
 		spin_unlock_irqrestore(&host->lock, flags);
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+		wake_unlock(&mmc_delayed_work_wake_lock);
+#endif
 		return;
 	}
 

@@ -293,10 +293,14 @@ static int tegra_i2c_fill_tx_fifo(struct tegra_i2c_dev *i2c_dev)
 
 	for (word = 0; word < words_to_transfer; word++) {
 		val = get_unaligned_le32(buf);
-		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
+		/* Update the field before writing into Tx Fifo */
 		buf += BYTES_PER_FIFO_WORD;
 		buf_remaining -= BYTES_PER_FIFO_WORD;
 		tx_fifo_avail--;
+		i2c_dev->msg_buf_remaining = buf_remaining;
+		i2c_dev->msg_buf = buf;
+
+		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
 	}
 
 	if (tx_fifo_avail > 0 && buf_remaining > 0) {
@@ -306,9 +310,13 @@ static int tegra_i2c_fill_tx_fifo(struct tegra_i2c_dev *i2c_dev)
 		val = 0;
 		for (byte = 0; byte < bytes_to_transfer; byte++)
 			val |= (*buf++) << (byte * 8);
-		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
+		/* Update the field before writing into Tx Fifo */
 		buf_remaining -= bytes_to_transfer;
 		tx_fifo_avail--;
+		i2c_dev->msg_buf_remaining = buf_remaining;
+		i2c_dev->msg_buf = buf;
+
+		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
 	}
 	BUG_ON(tx_fifo_avail > 0 && buf_remaining > 0);
 	i2c_dev->msg_buf_remaining = buf_remaining;
@@ -394,7 +402,7 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 {
 	u32 status;
-	const u32 status_err = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST;
+	const u32 status_err = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST | I2C_INT_TX_FIFO_OVERFLOW;
 	struct tegra_i2c_dev *i2c_dev = dev_id;
 
 	status = i2c_readl(i2c_dev, I2C_INT_STATUS);
@@ -522,7 +530,7 @@ err:
 	/* An error occured, mask all interrupts */
 	tegra_i2c_mask_irq(i2c_dev, I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST |
 		I2C_INT_PACKET_XFER_COMPLETE | I2C_INT_TX_FIFO_DATA_REQ |
-		I2C_INT_RX_FIFO_DATA_REQ);
+		I2C_INT_RX_FIFO_DATA_REQ | I2C_INT_TX_FIFO_OVERFLOW);
 
 	i2c_writel(i2c_dev, status, I2C_INT_STATUS);
 
@@ -584,7 +592,7 @@ static int tegra_i2c_xfer_msg(struct tegra_i2c_bus *i2c_bus,
 	if (i2c_dev->is_dvc)
 		dvc_i2c_unmask_irq(i2c_dev, DVC_CTRL_REG3_I2C_DONE_INTR_EN);
 
-	int_mask = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST;
+	int_mask = I2C_INT_NO_ACK | I2C_INT_ARBITRATION_LOST | I2C_INT_TX_FIFO_OVERFLOW;
 	if (msg->flags & I2C_M_RD)
 		int_mask |= I2C_INT_RX_FIFO_DATA_REQ;
 	else if (i2c_dev->msg_buf_remaining)

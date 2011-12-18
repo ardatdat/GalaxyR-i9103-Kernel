@@ -207,10 +207,16 @@ static long bthid_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
     printk("######## bthid_ioctl: cmd = %d ########\n", cmd);
 
-    if (cmd != BTHID_IOCTL_RPT_DSCP || p_dev == NULL)
+    if (p_dev == NULL)
     {
         return -EINVAL;
     }
+
+    if (cmd != BTHID_IOCTL_RPT_DSCP )
+    {
+       printk("command is not BTHID_IOCTL_RPT_DSCP. return");     
+       return 0;
+    }   
 
     p_ctrl = kmalloc(sizeof(struct bthid_ctrl), GFP_KERNEL);
     if (p_ctrl == NULL)

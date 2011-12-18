@@ -68,7 +68,7 @@ struct sec_jack_info {
 #ifndef CONFIG_MACH_BOSE_ATT
 	struct work_struct buttons_work_det; /* HACK DET worker from SEND_END intr */
 	struct workqueue_struct *queue_det;  /* HACK DET queue from SEND_END intr */
-#endif	
+#endif
 };
 #ifdef CONFIG_MACH_BOSE_ATT
 struct sec_jack_info *g_jack_info;
@@ -687,7 +687,7 @@ static struct platform_driver sec_jack_driver = {
 #ifndef CONFIG_MACH_BOSE_ATT
 	.suspend = sec_jack_suspend,
 	.resume = sec_jack_resume,
-#endif	
+#endif
 	.driver = {
 			.name = "sec_jack",
 			.owner = THIS_MODULE,

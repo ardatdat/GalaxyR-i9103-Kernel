@@ -46,6 +46,7 @@
 #define REGS_PS_DATA		0xB1
 #define REGS_PS_THD		0xB2
 
+static int gProximity_state;
 
 static u8 reg_defaults[8] = {
 	0x00, /* ARA: read only register */
@@ -106,6 +107,12 @@ struct cm3663_data {
 	ktime_t prox_poll_delay;
 	u8 power_state;
 };
+
+int Is_proximitysensor_active(void)
+{
+	return gProximity_state;
+}
+EXPORT_SYMBOL(Is_proximitysensor_active);
 
 int cm3663_i2c_read(struct cm3663_data *cm3663, u8 addr, u8 *val)
 {
@@ -383,6 +390,7 @@ static ssize_t proximity_enable_store(struct device *dev,
 	mutex_lock(&cm3663->power_lock);
 	if (new_value && !(cm3663->power_state & PROXIMITY_ENABLED)) {
 		cm3663->power_state |= PROXIMITY_ENABLED;
+		gProximity_state = true;
 #ifdef CONFIG_MACH_N1
 		reg = regulator_get(NULL, "LED_A_2V8");
 		regulator_enable(reg);
@@ -398,6 +406,7 @@ static ssize_t proximity_enable_store(struct device *dev,
 		enable_irq(cm3663->irq);
 		enable_irq_wake(cm3663->irq);
 	} else if (!new_value && (cm3663->power_state & PROXIMITY_ENABLED)) {
+		gProximity_state = false;
 		cm3663->power_state &= ~PROXIMITY_ENABLED;
 		disable_irq_wake(cm3663->irq);
 		disable_irq(cm3663->irq);
@@ -849,6 +858,7 @@ static int cm3663_i2c_probe(struct i2c_client *client,
 	/* set initial proximity value as 1 */
 	input_report_abs(cm3663->proximity_input_dev, ABS_DISTANCE, 1);
 	input_sync(cm3663->proximity_input_dev);
+	gProximity_state = false;
 
 	printk("CM3663 probe ok!!!n");
 	goto done;

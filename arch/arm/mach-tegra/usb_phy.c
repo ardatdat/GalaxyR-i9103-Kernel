@@ -1127,7 +1127,7 @@ static void uhsic_phy_power_off(struct tegra_usb_phy *phy)
 	val &= ~UHSIC_PHY_ENABLE;
 	writel(val, base + USB_SUSP_CTRL);
 #ifdef CONFIG_MACH_N1
-	if (gpio_get_value(GPIO_CP_ON)) {
+	if (gpio_get_value(GPIO_CP_RST)) {
 		pr_debug("SMD PHY HSIC ACT -> 0\n");
 		gpio_set_value(GPIO_ACTIVE_STATE_HSIC, 0);
 	}
@@ -1511,7 +1511,7 @@ int tegra_usb_phy_bus_connect(struct tegra_usb_phy *phy)
 		val |= UHSIC_RPU_STROBE;
 		writel(val, base + UHSIC_PADS_CFG1);
 #ifdef CONFIG_MACH_N1
-		if (gpio_get_value(GPIO_CP_ON)) {
+		if (gpio_get_value(GPIO_CP_RST)) {
 			pr_debug("SMD PHY HSIC ACT -> 1\n");
 			gpio_set_value(GPIO_ACTIVE_STATE_HSIC, 1);
 		} else
@@ -1559,7 +1559,7 @@ int tegra_usb_phy_bus_reset(struct tegra_usb_phy *phy)
 		udelay(2);
 
 #ifdef CONFIG_MACH_N1
-		if (!gpio_get_value(GPIO_CP_ON))
+		if (!gpio_get_value(GPIO_CP_RST))
 			return -ENOTCONN;
 #endif
 
@@ -1677,7 +1677,7 @@ int tegra_usb_phy_bus_idle(struct tegra_usb_phy *phy)
 			return 0;
 		}
 
-		if (gpio_get_value(GPIO_CP_ON)) {
+		if (gpio_get_value(GPIO_CP_RST)) {
 			pr_debug("SMD PHY HSIC ACT -> 1\n");
 			gpio_set_value(GPIO_ACTIVE_STATE_HSIC, 1);
 		} else

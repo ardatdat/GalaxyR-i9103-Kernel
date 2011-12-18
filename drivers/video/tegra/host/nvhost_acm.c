@@ -31,9 +31,10 @@
 
 #include "dev.h"
 
-#define MAX_ACM_TIMEOUT 1*HZ
+#define MAX_ACM_TIMEOUT 2*HZ
 #define ACM_TIMEOUT 4
 #define SUSPEND_TIMEOUT 6*HZ // As per __device_suspend timer.expires
+#define DISABLE_3D_POWERGATING
 #define DISABLE_MPE_POWERGATING
 
 static int acm_timeout = ACM_TIMEOUT;
@@ -182,7 +183,7 @@ int nvhost_module_init(struct nvhost_module *mod, const char *name,
 	mod->powergate_id = get_module_powergate_id(name);
 	mod->force_suspend = false;
 
-#if CONFIG_DISABLE_3D_POWERGATING
+#ifdef DISABLE_3D_POWERGATING
 	/*
 	 * It is possible for the 3d block to generate an invalid memory
 	 * request during the power up sequence in some cases.  Workaround

@@ -66,7 +66,6 @@
 /*----------------------*/
 /*-  Static Functions. -*/
 /*----------------------*/
-unsigned char reg_temp;
 
 int get_MPUReg(struct mldl_cfg *mldl_cfg, void *gyro_handle)
 {
@@ -74,16 +73,12 @@ int get_MPUReg(struct mldl_cfg *mldl_cfg, void *gyro_handle)
 	unsigned char b;
 
 	result = MLSLSerialRead(gyro_handle, mldl_cfg->addr,
-				MPUREG_PWR_MGM, 1, &reg_temp);
-	ERROR_CHECK(result);
-
-#ifdef CONFIG_MPU_SENSORS_DEBUG
-	result = MLSLSerialRead(gyro_handle, mldl_cfg->addr,
-				MPUREG_USER_CTRL, 1, &b);	
-	printk("####### %s : Register(0x61) = 0x%x\n", __func__, b);
+				MPUREG_USER_CTRL, 1, &b);
+#ifdef CONFIG_MPU_SENSORS_DEBUG	
+	printk("%s : Register(0x61) = 0x%x\n", __func__, b);
 	result = MLSLSerialRead(gyro_handle, mldl_cfg->addr,
 				MPUREG_PWR_MGM, 1, &b);	
-	printk("####### %s : Register(0x62) = 0x%x\n", __func__, b);
+	printk("%s : Register(0x62) = 0x%x\n", __func__, b);
 #endif
 
 	return 0;
@@ -92,19 +87,25 @@ int get_MPUReg(struct mldl_cfg *mldl_cfg, void *gyro_handle)
 int set_MPUReg(struct mldl_cfg *mldl_cfg, void *gyro_handle)
 {			
 	int result = ML_SUCCESS;
-	unsigned char b = reg_temp;
+	unsigned char b;
+
+	if( !(mldl_cfg->requested_sensors & 0x0f) )
+	{
+		result = MLSLSerialRead(gyro_handle, mldl_cfg->addr,
+					MPUREG_PWR_MGM, 1, &b);
 
 	result = MLSLSerialWriteSingle(gyro_handle, mldl_cfg->addr,
-			       MPUREG_PWR_MGM,  b);
+				       MPUREG_PWR_MGM,  b | 0x40);
 	ERROR_CHECK(result);	
+	}
 
 #ifdef CONFIG_MPU_SENSORS_DEBUG
 	result = MLSLSerialRead(gyro_handle, mldl_cfg->addr,
 				MPUREG_USER_CTRL, 1, &b);	
-	printk("####### %s : Register(0x61) = 0x%x\n", __func__, b);
+	printk("%s : Register(0x61) = 0x%x\n", __func__, b);
 	result = MLSLSerialRead(gyro_handle, mldl_cfg->addr,
 				MPUREG_PWR_MGM, 1, &b);	
-	printk("####### %s : Register(0x62) = 0x%x\n", __func__, b);
+	printk("%s : Register(0x62) = 0x%x\n", __func__, b);
 #endif
 
 	return 0;

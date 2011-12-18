@@ -2771,6 +2771,9 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 		 * An xHCI controller cannot send any packets to a device until
 		 * a set address command successfully completes.
 		 */
+#ifdef CONFIG_MACH_N1
+		old_scheme_first = 0;
+#endif
 		if (USE_NEW_SCHEME(retry_counter) && !(hcd->driver->flags & HCD_USB3)) {
 			struct usb_device_descriptor *buf;
 			int r = 0;
@@ -2812,10 +2815,11 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 			udev->descriptor.bMaxPacketSize0 =
 					buf->bMaxPacketSize0;
 			kfree(buf);
-
+#if !defined(CONFIG_MACH_N1)
 			retval = hub_port_reset(hub, port1, udev, delay);
 			if (retval < 0)		/* error or disconnect */
 				goto fail;
+#endif
 			if (oldspeed != udev->speed) {
 				dev_dbg(&udev->dev,
 					"device reset changed speed!\n");

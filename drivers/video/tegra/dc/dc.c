@@ -1305,6 +1305,13 @@ static bool _tegra_dc_controller_enable(struct tegra_dc *dc)
 	return true;
 }
 
+void tegra_dc_data_out(struct tegra_dc *dc)
+{
+    tegra_dc_writel(dc, DISP_CTRL_MODE_C_DISPLAY, DC_CMD_DISPLAY_COMMAND);
+    tegra_dc_writel(dc, GENERAL_ACT_REQ << 8, DC_CMD_STATE_CONTROL);
+    tegra_dc_writel(dc, GENERAL_ACT_REQ, DC_CMD_STATE_CONTROL);
+}
+
 static bool _tegra_dc_enable(struct tegra_dc *dc)
 {
 	if (dc->mode.pclk == 0)

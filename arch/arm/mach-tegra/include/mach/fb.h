@@ -42,6 +42,7 @@ void tegra_fb_suspend(struct tegra_fb_info *tegra_fb);
 #if defined(CONFIG_MACH_N1)
 void tegra_fb_update_address(struct tegra_fb_info *fb_info, struct tegra_dc_win *win);
 #endif
+void tegra_fb_dc_data_out(struct fb_info *info);
 #else
 static inline struct tegra_fb_info *tegra_fb_register(struct nvhost_device *ndev,
 						      struct tegra_dc *dc,

@@ -44,6 +44,10 @@
 #include <linux/mmc/discard.h>
 #endif
 
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+#include <linux/wakelock.h>
+#endif
+
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
@@ -63,6 +67,10 @@ MODULE_ALIAS("mmc:block");
  */
 #define MMC_SHIFT	3
 #define MMC_NUM_MINORS	(256 >> MMC_SHIFT)
+
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+static struct wake_lock mmc_chkpart_wake_lock;
+#endif
 
 #ifdef CONFIG_MMC_DISCARD_MOVINAND
 #define DISCARD_THRESHOLD	65536 /* 32MB threadhold with 512byte sector unit */
@@ -920,7 +928,19 @@ static int mmc_blk_probe(struct mmc_card *card)
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	mmc_set_bus_resume_policy(card->host, 1);
 #endif
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+       wake_lock(&mmc_chkpart_wake_lock);
+	printk(KERN_INFO "%s: %s wake lock for check partition+++\n",
+		    __func__, md->disk->disk_name);
+#endif
+
 	add_disk(md->disk);
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+       wake_unlock(&mmc_chkpart_wake_lock);
+	printk(KERN_INFO "%s: %s wake lock for check partition---\n",
+		    __func__, md->disk->disk_name);
+#endif
+
 	return 0;
 
  out:
@@ -1004,6 +1024,10 @@ static int __init mmc_blk_init(void)
 {
 	int res;
 
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+       wake_lock_init(&mmc_chkpart_wake_lock,WAKE_LOCK_SUSPEND,"mmc_chkpart");
+#endif
+
 	res = register_blkdev(MMC_BLOCK_MAJOR, "mmc");
 	if (res)
 		goto out;
@@ -1036,6 +1060,10 @@ static void __exit mmc_blk_exit(void)
 #endif
 	mmc_unregister_driver(&mmc_driver);
 	unregister_blkdev(MMC_BLOCK_MAJOR, "mmc");
+
+#if defined(CONFIG_MACH_BOSE_ATT) || defined(CONFIG_MACH_N1)
+		wake_lock_destroy(&mmc_chkpart_wake_lock);
+#endif
 }
 
 module_init(mmc_blk_init);

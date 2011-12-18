@@ -83,6 +83,7 @@ struct s5k4ecgx_info {
 	struct s5k4ecgx_platform_data *pdata;
 	bool touch_af_enable;
 	bool flash_fired;
+	bool ESD_reset;
 };
 
 extern struct class *sec_class;
@@ -172,6 +173,7 @@ static void s5k4ecgx_esdreset(struct s5k4ecgx_info *info)
 	//msleep(500);
 	usleep_range(500000, 600000);//500ms
 	info->pdata->power_on();
+	info->ESD_reset = true;
 }
 
 static int s5k4ecgx_frame_delay(struct s5k4ecgx_info *info)
@@ -5535,10 +5537,20 @@ static int s5k4ecgx_set_mode(struct s5k4ecgx_info *info, struct s5k4ecgx_mode *m
 		err = s5k4ecgx_set_capture_mode(info, mode);
 		//exif information
 		err = s5k4ecgx_get_exif_info(info, &rear_exif_info);
-	} else if(mode->VideoActive) {
-		/*pr_err("%s: invalid recording resolution supplied to set mode %d %d\n",
-				__func__, mode->xres, mode->yres);*/
+	} else if(info->ESD_reset && mode->VideoActive) {	//ESD
+		info->oprmode = S5K4ECGX_OPRMODE_VIDEO;
+		info->framesize_index = s5k4ecgx_get_framesize_index(info, mode);
+		//printk(KERN_ERR "func(%s): info->framesize_index %d\n", __func__, info->framesize_index);
+		err = s5k4ecgx_set_preview_resolution(info, mode);
+		if(err < 0) {
+			pr_err("%s: s5k4ecgx_set_preview_resolution() returned %d\n", __func__, err);
+
+			return -EINVAL;
+		}
 		err = 0;
+	} else {
+		//printk(KERN_ERR "func(%s):Line(%d)\n",__func__,__LINE__);
+		err =0;
 	}
 
 	if (err < 0)
@@ -5815,6 +5827,7 @@ static int s5k4ecgx_open(struct inode *inode, struct file *file)
 	info->gfps_range = false;				// for fps range
 	info->pre_flash_ae_skip = 0;				//for When pre flash, 200ms delay is needed.
 	info->pre_flash_ae_stable_check = 0;			// for When pre flash, AE stable check.
+	info->ESD_reset = false;				// for ESD reset
 
 	rear_mode.xres = 0;
 	rear_mode.yres = 0;

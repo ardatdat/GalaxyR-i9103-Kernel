@@ -37,31 +37,29 @@
 #include "clock.h"
 #include "tegra2_statmon.h"
 
-#define STAT_MON_COP_MON                       0x120
-#define STAT_MON_COP_MON_SAMPLE_PERIOD_SHIFT   20
-#define STAT_MON_COP_MON_SAMPLE_PERIOD_MASK    (0xFF << STAT_MON_COP_MON_SAMPLE_PERIOD_SHIFT)
-#define STAT_MON_COP_MON_INT_STATUS            BIT(29) /* write 1 to clear */
-#define STAT_MON_COP_MON_INT_ENBLE             BIT(30)
-#define STAT_MON_COP_MON_ENBLE                 BIT(31)
-#define STAT_MON_COP_MON_STATUS                        0x124
+#define COP_MON_CTRL		0x120
+#define COP_MON_STATUS		0x124
 
-#define STAT_MON_VPIPE_MON                     0x1c0
-#define STAT_MON_VPIPE_MON_INT_STATUS          BIT(29) /* write 1 to clear */
+#define SAMPLE_PERIOD_SHIFT	20
+#define SAMPLE_PERIOD_MASK	(0xFF << SAMPLE_PERIOD_SHIFT)
+#define INT_STATUS		BIT(29) /* write 1 to clear */
+#define INT_ENABLE		BIT(30)
+#define MON_ENABLE		BIT(31)
 
-#define ARVDE_PPB_IDLE_MON                     0x2800
-#define ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_SHIFT 20
-#define ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_MASK  (0xFF << ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_SHIFT)
-#define ARVDE_PPB_IDLE_MON_INT_STATUS          BIT(29) /* write 1 to clear */
-#define ARVDE_PPB_IDLE_MON_ENBLE               BIT(31)
-#define ARVDE_PPB_IDLE_STATUS                  0x2804
+#define WINDOW_SIZE		128
+#define FREQ_MULT		1000
+#define UPPER_BAND		1000
+#define LOWER_BAND		1000
 
 #define BOOST_FRACTION_BITS    8
 
 struct sampler {
        struct clk      *clock;
-       unsigned long   active_cycles[128];
-       unsigned long   total_active_cycles;
+	unsigned long	active_cycles[WINDOW_SIZE];
+	unsigned long   total_active_cycles;
        unsigned long   avg_freq;
+	unsigned long	target_freq;
+	unsigned long	old_target_freq;
        unsigned long   *last_sample;
        unsigned long   idle_cycles;
        unsigned long   boost_freq;
@@ -84,10 +82,10 @@ struct tegra2_stat_mon {
        struct clk      *stat_mon_clock;
        struct mutex    stat_mon_lock;
        struct sampler  avp_sampler;
-       struct sampler  vde_sampler;
 };
 
 static unsigned long sclk_table[] = {
+	300000,
        240000,
        200000,
        150000,
@@ -129,21 +127,12 @@ static irqreturn_t stat_mon_isr(int irq, void *data)
        u32 reg_val;
 
        /* disable AVP monitor */
-       reg_val = tegra2_stat_mon_read(STAT_MON_COP_MON);
-       reg_val |= STAT_MON_COP_MON_INT_STATUS;
-       tegra2_stat_mon_write(reg_val, STAT_MON_COP_MON);
+	reg_val = tegra2_stat_mon_read(COP_MON_CTRL);
+	reg_val |= INT_STATUS;
+	tegra2_stat_mon_write(reg_val, COP_MON_CTRL);
 
-       /* disable VDE monitor */
-       reg_val = tegra2_stat_mon_read(STAT_MON_VPIPE_MON);
-       reg_val |= STAT_MON_VPIPE_MON_INT_STATUS;
-       tegra2_stat_mon_write(reg_val, STAT_MON_VPIPE_MON);
-
-       reg_val = tegra2_vde_mon_read(ARVDE_PPB_IDLE_MON);
-       reg_val |= ARVDE_PPB_IDLE_MON_INT_STATUS;
-       tegra2_vde_mon_write(reg_val, ARVDE_PPB_IDLE_MON);
-
-       stat_mon->avp_sampler.idle_cycles = tegra2_stat_mon_read(STAT_MON_COP_MON_STATUS);
-       stat_mon->vde_sampler.idle_cycles = tegra2_vde_mon_read(ARVDE_PPB_IDLE_STATUS);
+	stat_mon->avp_sampler.idle_cycles =
+			tegra2_stat_mon_read(COP_MON_STATUS);
 
        return IRQ_WAKE_THREAD;
 }
@@ -151,8 +140,8 @@ static irqreturn_t stat_mon_isr(int irq, void *data)
 
 static void add_active_sample(struct sampler *s, unsigned long cycles)
 {
-       if (s->last_sample == &s->active_cycles[127])
-               s->last_sample = &s->active_cycles[0];
+	if (s->last_sample == &s->active_cycles[WINDOW_SIZE - 1])
+		s->last_sample = &s->active_cycles[0];
        else
                s->last_sample++;
 
@@ -164,23 +153,22 @@ static void add_active_sample(struct sampler *s, unsigned long cycles)
 static unsigned long round_rate(struct sampler *s, unsigned long rate)
 {
        int i;
-       unsigned long round_rate;
        unsigned long *table = s->table;
 
        if (rate >= table[0])
-               round_rate = table[0] - 1000;
+               return table[0];
 
-       for (i = 0; i < s->table_size; i++) {
-               if (rate < table[i])
+	for (i = 1; i < s->table_size; i++) {
+		if (rate <= table[i])
                        continue;
                else {
-                       round_rate = table[i-1];
+                       return table[i-1];
                        break;
                }
        }
        if (rate <= table[s->table_size - 1])
-               round_rate = table[s->table_size - 1];
-       return round_rate;
+		return table[s->table_size - 1];
+	return rate;
 }
 
 static void set_target_freq(struct sampler *s)
@@ -189,10 +177,10 @@ static void set_target_freq(struct sampler *s)
        unsigned long target_freq;
        unsigned long active_count;
 
-       clock_rate = clk_get_rate(s->clock) / 1000;
-       active_count = (s->sample_time + 1) * clock_rate;
-       active_count = (active_count > s->idle_cycles) ? (active_count - s->idle_cycles) : (0);
-
+	clock_rate = clk_get_rate(s->clock) / FREQ_MULT;
+	active_count = (s->sample_time + 1) * clock_rate;
+	active_count = (active_count > s->idle_cycles) ?
+						(active_count - s->idle_cycles) : (0);	
        s->sample_count++;
 
        add_active_sample(s, active_count);
@@ -216,19 +204,22 @@ static void set_target_freq(struct sampler *s)
                        s->boost_freq = s->clock->max_rate;
        }
 
-       if ((s->avg_freq + 1000) < s->bumped_freq)
-               s->bumped_freq = s->avg_freq + 1000;
-       else if (s->avg_freq > (s->bumped_freq + 1000))
-               s->bumped_freq = s->avg_freq - 1000;
+	if ((s->avg_freq + LOWER_BAND) < s->bumped_freq)
+		s->bumped_freq = s->avg_freq + LOWER_BAND;
+	else if (s->avg_freq > (s->bumped_freq + UPPER_BAND))
+		s->bumped_freq = s->avg_freq - UPPER_BAND;
 
        s->bumped_freq += (s->bumped_freq >> 3);
 
        target_freq = max(s->bumped_freq, s->clock->min_rate);
        target_freq += s->boost_freq;
 
-       active_count = target_freq;
-       target_freq = round_rate(s, target_freq) * 1000;
-       clk_set_rate(s->clock, target_freq);
+	s->target_freq = round_rate(s, target_freq) * FREQ_MULT;
+
+	if (s->target_freq != s->old_target_freq) {
+		clk_set_rate(s->clock, s->target_freq);
+		s->old_target_freq = s->target_freq;
+	}
 }
 
 /* - process ticks in thread context
@@ -241,15 +232,10 @@ static irqreturn_t stat_mon_isr_thread_fn(int irq, void *data)
        set_target_freq(&stat_mon->avp_sampler);
        mutex_unlock(&stat_mon->stat_mon_lock);
 
-       /* start VDE sampler */
-       reg_val = tegra2_vde_mon_read(ARVDE_PPB_IDLE_MON);
-       reg_val |= ARVDE_PPB_IDLE_MON_ENBLE;
-       tegra2_vde_mon_write(reg_val, ARVDE_PPB_IDLE_MON);
-
        /* start AVP sampler */
-       reg_val = tegra2_stat_mon_read(STAT_MON_COP_MON);
-       reg_val |= STAT_MON_COP_MON_ENBLE;
-       tegra2_stat_mon_write(reg_val, STAT_MON_COP_MON);
+	reg_val = tegra2_stat_mon_read(COP_MON_CTRL);
+	reg_val |= MON_ENABLE;
+	tegra2_stat_mon_write(reg_val, COP_MON_CTRL);
        return IRQ_HANDLED;
 }
 
@@ -258,17 +244,12 @@ void tegra2_statmon_stop(void)
        u32 reg_val = 0;
 
        /* disable AVP monitor */
-       reg_val |= STAT_MON_COP_MON_INT_STATUS;
-       tegra2_stat_mon_write(reg_val, STAT_MON_COP_MON);
-
-       /* disable VDE monitor */
-       reg_val = 0;
-       reg_val |= STAT_MON_VPIPE_MON_INT_STATUS;
-       tegra2_stat_mon_write(reg_val, STAT_MON_VPIPE_MON);
-       reg_val |= ARVDE_PPB_IDLE_MON_INT_STATUS;
-       tegra2_vde_mon_write(reg_val, ARVDE_PPB_IDLE_MON);
+	reg_val |= INT_STATUS;
+	tegra2_stat_mon_write(reg_val, COP_MON_CTRL);
 
        clk_disable(stat_mon->stat_mon_clock);
+	   
+	stat_mon->avp_sampler.old_target_freq = 0;
 }
 
 int tegra2_statmon_start(void)
@@ -278,39 +259,16 @@ int tegra2_statmon_start(void)
        clk_enable(stat_mon->stat_mon_clock);
 
        /* disable AVP monitor */
-       reg_val |= STAT_MON_COP_MON_INT_STATUS;
-       tegra2_stat_mon_write(reg_val, STAT_MON_COP_MON);
-
-       /* disable VDE monitor */
-       reg_val = 0;
-       reg_val |= STAT_MON_VPIPE_MON_INT_STATUS;
-       tegra2_stat_mon_write(reg_val, STAT_MON_VPIPE_MON);
-       reg_val |= ARVDE_PPB_IDLE_MON_INT_STATUS;
-       tegra2_vde_mon_write(reg_val, ARVDE_PPB_IDLE_MON);
-
-       /* start VDE sampler */
-       reg_val = 0;
-       reg_val |= ARVDE_PPB_IDLE_MON_ENBLE;
-       reg_val |= ((stat_mon->vde_sampler.sample_time \
-               << ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_SHIFT) & \
-               ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_MASK);
-       tegra2_vde_mon_write(reg_val, ARVDE_PPB_IDLE_MON);
-       /* start VDE sampler */
-       reg_val = 0;
-       reg_val |= ARVDE_PPB_IDLE_MON_ENBLE;
-       reg_val |= ((stat_mon->vde_sampler.sample_time \
-               << ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_SHIFT) & \
-               ARVDE_PPB_IDLE_MON_SAMPLE_PERIOD_MASK);
-       tegra2_vde_mon_write(reg_val, ARVDE_PPB_IDLE_MON);
+	reg_val |= INT_STATUS;
+	tegra2_stat_mon_write(reg_val, COP_MON_CTRL);
 
        /* start AVP sampler. also enable INT to CPU */
        reg_val = 0;
-       reg_val |= STAT_MON_COP_MON_ENBLE;
-       reg_val |= STAT_MON_COP_MON_INT_ENBLE;
+	reg_val |= MON_ENABLE;
+	reg_val |= INT_ENABLE;
        reg_val |= ((stat_mon->avp_sampler.sample_time \
-               << STAT_MON_COP_MON_SAMPLE_PERIOD_SHIFT) & \
-               STAT_MON_COP_MON_SAMPLE_PERIOD_MASK);
-       tegra2_stat_mon_write(reg_val, STAT_MON_COP_MON);
+		<< SAMPLE_PERIOD_SHIFT) & SAMPLE_PERIOD_MASK);
+	tegra2_stat_mon_write(reg_val, COP_MON_CTRL);
        return 0;
 }
 
@@ -344,14 +302,14 @@ static ssize_t tegra2_statmon_enable_store(struct sysdev_class *class,
        return 0;
 }
 
-static ssize_t tegra2_statmon_sampling_interval_show(struct sysdev_class *class,
-       struct sysdev_class_attribute *attr, char *buf)
+static ssize_t tegra2_statmon_sample_time_show(struct sysdev_class *class,
+	struct sysdev_class_attribute *attr, char *buf)
 {
        return sprintf(buf, "%d\n", stat_mon->avp_sampler.sample_time);
 }
 
-static ssize_t tegra2_statmon_sampling_interval_store(struct sysdev_class *class,
-       struct sysdev_class_attribute *attr,
+static ssize_t tegra2_statmon_sample_time_store(struct sysdev_class *class,
+	struct sysdev_class_attribute *attr,
        const char *buf, size_t count)
 {
        int value;
@@ -359,49 +317,33 @@ static ssize_t tegra2_statmon_sampling_interval_store(struct sysdev_class *class
        mutex_lock(&stat_mon->stat_mon_lock);
        sscanf(buf, "%d", &value);
        stat_mon->avp_sampler.sample_time = value;
-       stat_mon->vde_sampler.sample_time = value;
        mutex_unlock(&stat_mon->stat_mon_lock);
 
        return count;
 }
 
-static ssize_t tegra2_statmon_avp_utilization_show(struct sysdev_class *class,
-       struct sysdev_class_attribute *attr, char *buf)
+
+
+static ssize_t tegra2_statmon_status_show(struct sysdev_class *class,
+	struct sysdev_class_attribute *attr, char *buf)
 {
-       unsigned long avp_util;
+	unsigned long active_cycl;
+	unsigned long target_freq, avg_freq, bumped_freq, boost_freq;
 
        mutex_lock(&stat_mon->stat_mon_lock);
-       avp_util = stat_mon->avp_sampler.total_active_cycles;
-       mutex_unlock(&stat_mon->stat_mon_lock);
+	active_cycl = stat_mon->avp_sampler.total_active_cycles;
+	target_freq = stat_mon->avp_sampler.target_freq;
+	avg_freq = stat_mon->avp_sampler.avg_freq;
+	bumped_freq = stat_mon->avp_sampler.bumped_freq;
+	boost_freq = stat_mon->avp_sampler.boost_freq;
+	mutex_unlock(&stat_mon->stat_mon_lock);
 
-       pr_info("%s : AVP utilization = %lu\n", __func__, avp_util);
-
-       return sprintf(buf, "%lu\n", avp_util);
+	return sprintf(buf, "active cycl: %lu\ntarget freq: %lu\n   avg freq: %lu\n  bump freq: %lu\n boost freq: %lu\n",
+			active_cycl, target_freq, avg_freq, bumped_freq, boost_freq);
 }
 
-static ssize_t tegra2_statmon_avp_utilization_store(struct sysdev_class *class,
-       struct sysdev_class_attribute *attr,
-       const char *buf, size_t count)
-{
-       return -EINVAL;
-}
-
-static ssize_t tegra2_statmon_vde_utilization_show(struct sysdev_class *class,
-       struct sysdev_class_attribute *attr, char *buf)
-{
-       unsigned long vde_util;
-
-       mutex_lock(&stat_mon->stat_mon_lock);
-       vde_util = stat_mon->vde_sampler.total_active_cycles;
-       mutex_unlock(&stat_mon->stat_mon_lock);
-
-       pr_info("%s : VDE utilization = %lu\n", __func__, vde_util);
-
-       return sprintf(buf, "%lu\n", vde_util);
-}
-
-static ssize_t tegra2_statmon_vde_utilization_store(struct sysdev_class *class,
-       struct sysdev_class_attribute *attr,
+static ssize_t tegra2_statmon_status_store(struct sysdev_class *class,
+	struct sysdev_class_attribute *attr,
        const char *buf, size_t count)
 {
        return -EINVAL;
@@ -416,17 +358,15 @@ static struct sysdev_class tegra2_statmon_sysclass = {
                tegra2_statmon_##_attr##_show, tegra2_statmon_##_attr##_store)
 
 TEGRA2_STATMON_ATTRIBUTE_EXPAND(enable, 0664);
-TEGRA2_STATMON_ATTRIBUTE_EXPAND(sampling_interval, 0664);
-TEGRA2_STATMON_ATTRIBUTE_EXPAND(avp_utilization, 0444);
-TEGRA2_STATMON_ATTRIBUTE_EXPAND(vde_utilization, 0444);
+TEGRA2_STATMON_ATTRIBUTE_EXPAND(sample_time, 0644);
+TEGRA2_STATMON_ATTRIBUTE_EXPAND(status, 0444);
 
 #define TEGRA2_STATMON_ATTRIBUTE(_name)        &attr_##_name
 
 static struct sysdev_class_attribute *tegra2_statmon_attrs[] = {
        TEGRA2_STATMON_ATTRIBUTE(enable),
-       TEGRA2_STATMON_ATTRIBUTE(sampling_interval),
-       TEGRA2_STATMON_ATTRIBUTE(avp_utilization),
-       TEGRA2_STATMON_ATTRIBUTE(vde_utilization),
+	TEGRA2_STATMON_ATTRIBUTE(sample_time),
+	TEGRA2_STATMON_ATTRIBUTE(status),
        NULL,
 };
 
@@ -450,10 +390,10 @@ static int sampler_init(struct sampler *s)
                pr_err("%s: Failed to set rate\n", __func__);
                return -1;
        }
-       clock_rate = clk_get_rate(clock) / 1000;
-       active_count = clock_rate * (s->sample_time + 1);
+	clock_rate = clk_get_rate(clock) / FREQ_MULT;
+	active_count = clock_rate * (s->sample_time + 1);
 
-       for (i = 0; i < 128; i++)
+       for (i = 0; i < WINDOW_SIZE; i++)
                s->active_cycles[i] = active_count;
 
        s->clock = clock;
@@ -496,13 +436,14 @@ static int tegra2_stat_mon_init(void)
        stat_mon->avp_sampler.boost_inc_coef = 255;
        stat_mon->avp_sampler.boost_dec_coef = 128;
        stat_mon->avp_sampler.min_samples = 3;
+	stat_mon->avp_sampler.old_target_freq = 0;
 
        mutex_init(&stat_mon->stat_mon_lock);
 
        /* /sys/devices/system/tegra2_statmon */
        rc = sysdev_class_register(&tegra2_statmon_sysclass);
        if (rc) {
-               pr_err("%s : Not able to create statmon sysfs entry\n", __func__);
+               pr_err("%s : Couldn't create statmon sysfs entry\n", __func__);
                return 0;
        }
 
@@ -510,7 +451,7 @@ static int tegra2_stat_mon_init(void)
                rc = sysdev_class_create_file(&tegra2_statmon_sysclass,
                        tegra2_statmon_attrs[i]);
                if (rc) {
-                       pr_err("%s: sysdev_class_create_file : failed\n", __func__);
+                       pr_err("%s: Failed to create sys class\n", __func__);
                        sysdev_class_unregister(&tegra2_statmon_sysclass);
                        kfree(stat_mon);
                        return 0;
@@ -520,11 +461,10 @@ static int tegra2_stat_mon_init(void)
        ret_val = request_threaded_irq(INT_SYS_STATS_MON, stat_mon_isr,
                stat_mon_isr_thread_fn, 0, "stat_mon_int", NULL);
        if (ret_val) {
-               pr_err("%s: cannot register INT_SYS_STATS_MON handler, ret_val = 0x%x\n",
-                       __func__, ret_val);
+		pr_err("%s: cannot register INT_SYS_STATS_MON handler, \
+				ret_val = 0x%x\n", __func__, ret_val);
                tegra2_statmon_stop();
                stat_mon->avp_sampler.enable = false;
-               stat_mon->vde_sampler.enable = false;
                kfree(stat_mon);
                return ret_val;
        }

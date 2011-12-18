@@ -64,6 +64,7 @@ static struct clk **graphics_clks;
 static struct clk **graphics_restore_clks;
 static unsigned long  *graphics_restore_clk_rates;
 static struct tegra_camera_clk_config *graphics_clk_cfg;
+extern void nvhost_set_max_acm_timeout(bool enable);
 
 #ifdef CONFIG_TEGRA_CPU_FREQ_LOCK
 extern void tegra_cpu_lock_speed(int min_rate, int timeout_ms);

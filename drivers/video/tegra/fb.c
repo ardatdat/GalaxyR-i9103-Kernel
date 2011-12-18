@@ -693,6 +693,12 @@ void tegra_fb_update_address(struct tegra_fb_info *tegra_fb, struct tegra_dc_win
 	tegra_fb->info->fix.smem_start	= fb_phys;
 	tegra_fb->info->fix.smem_len	= fb_size;
 }
+
+void tegra_fb_dc_data_out(struct fb_info *info)
+{
+    struct tegra_fb_info *tegra_fb = info->par;
+    tegra_dc_data_out(tegra_fb->win->dc);
+}
 #endif
 
 void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
@@ -917,3 +923,11 @@ void tegra_fb_unregister(struct tegra_fb_info *fb_info)
 	iounmap(info->screen_base);
 	framebuffer_release(info);
 }
+
+#ifdef CONFIG_MACH_N1_CHN
+void tegra_fb_dc_data_out(struct fb_info *info)
+{
+    struct tegra_fb_info *tegra_fb = info->par;
+    tegra_dc_data_out(tegra_fb->win->dc);
+}
+#endif 

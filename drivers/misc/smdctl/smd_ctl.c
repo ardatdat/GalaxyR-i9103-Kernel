@@ -641,7 +641,8 @@ static int xmm6260_on(struct str_smdctl *smdctl)
 	msleep(100);
 
 	gpio_set_value(gpio[SMD_GPIO_CP_ON].num, HIGH);
-	msleep(150);
+	udelay(60);
+	gpio_set_value(gpio[SMD_GPIO_CP_ON].num, LOW);
 
 	/* recover additional setup */
 	gpio_direction_input(gpio[SMD_GPIO_HSIC_SUS].num);
