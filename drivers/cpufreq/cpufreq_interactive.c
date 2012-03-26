@@ -58,7 +58,7 @@ static cpumask_t down_cpumask;
 static spinlock_t down_cpumask_lock;
 
 /* Go to max speed when CPU load at or above this value. */
-#define DEFAULT_GO_MAXSPEED_LOAD 85
+#define DEFAULT_GO_MAXSPEED_LOAD 75
 static unsigned long go_maxspeed_load;
 
 /*
@@ -68,7 +68,7 @@ static unsigned long go_maxspeed_load;
 static unsigned long min_sample_time;
 
 #define DEBUG 0
-#define BUFSZ 128
+#define BUFSZ 192
 
 #if DEBUG
 #include <linux/proc_fs.h>
