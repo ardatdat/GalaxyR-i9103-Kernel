@@ -87,34 +87,24 @@ static void cmc623_pwm_backlight_ctl(struct platform_device *pdev, int intensity
 {
 	int tune_level;
 
-	if (system_rev >= 12)
+	if (intensity <= 220)
 	{
-		if (intensity >= MID_BRIGHTNESS_LEVEL_AFTER_HW12)
-			tune_level = (intensity - MID_BRIGHTNESS_LEVEL_AFTER_HW12) * (MAX_BACKLIGHT_VALUE_AFTER_HW12-MID_BACKLIGHT_VALUE_AFTER_HW12) / (MAX_BRIGHTNESS_LEVEL_AFTER_HW12-MID_BRIGHTNESS_LEVEL_AFTER_HW12) + MID_BACKLIGHT_VALUE_AFTER_HW12;
-		else if (intensity >= LOW_BRIGHTNESS_LEVEL_AFTER_HW12)
-			tune_level = (intensity - LOW_BRIGHTNESS_LEVEL_AFTER_HW12) * (MID_BACKLIGHT_VALUE_AFTER_HW12-LOW_BACKLIGHT_VALUE_AFTER_HW12) / (MID_BRIGHTNESS_LEVEL_AFTER_HW12-LOW_BRIGHTNESS_LEVEL_AFTER_HW12) + LOW_BACKLIGHT_VALUE_AFTER_HW12;
-		else if (intensity >= DIM_BRIGHTNESS_LEVEL_AFTER_HW12)
-			tune_level = (intensity - DIM_BRIGHTNESS_LEVEL_AFTER_HW12) * (LOW_BACKLIGHT_VALUE_AFTER_HW12-DIM_BACKLIGHT_VALUE_AFTER_HW12) / (LOW_BRIGHTNESS_LEVEL_AFTER_HW12-DIM_BRIGHTNESS_LEVEL_AFTER_HW12) + DIM_BACKLIGHT_VALUE_AFTER_HW12;
-		else if (intensity > 0)
-			tune_level = DIM_BACKLIGHT_VALUE_AFTER_HW12;
-		else
-			tune_level = intensity;	
+		//When below 220, the max intensity = 99
+		intensity = (intensity * 45) / 100;
 	}
-	else
+	if (intensity > 220 && intensity <= 250)
 	{
-		if (intensity >= MID_BRIGHTNESS_LEVEL)
-			tune_level = (intensity - MID_BRIGHTNESS_LEVEL) * (MAX_BACKLIGHT_VALUE-MID_BACKLIGHT_VALUE) / (MAX_BRIGHTNESS_LEVEL-MID_BRIGHTNESS_LEVEL) + MID_BACKLIGHT_VALUE;
-		else if (intensity >= LOW_BRIGHTNESS_LEVEL)
-			tune_level = (intensity - LOW_BRIGHTNESS_LEVEL) * (MID_BACKLIGHT_VALUE-LOW_BACKLIGHT_VALUE) / (MID_BRIGHTNESS_LEVEL-LOW_BRIGHTNESS_LEVEL) + LOW_BACKLIGHT_VALUE;
-		else if (intensity >= DIM_BRIGHTNESS_LEVEL)
-			tune_level = (intensity - DIM_BRIGHTNESS_LEVEL) * (LOW_BACKLIGHT_VALUE-DIM_BACKLIGHT_VALUE) / (LOW_BRIGHTNESS_LEVEL-DIM_BRIGHTNESS_LEVEL) + DIM_BACKLIGHT_VALUE;
-		else if (intensity > 0)
-			tune_level = DIM_BACKLIGHT_VALUE;
-		else
-			tune_level = intensity;
+		//When above 220, the intensity will step up by 4
+		intensity = 99 + ((intensity - 220) * 5);
 	}
-
-	pr_info("--- [cmc backlight control HW rev %d]%d(%d)---\n",system_rev,intensity, tune_level);
+	if (intensity > 250)
+	{
+		intensity = 250;
+	}
+	intensity = (intensity * 1550) / 250;
+	if (intensity > 1550) intensity = 1550;
+	if (intensity < 0) intensity = 0;
+	tune_level = intensity;
 
 	cmc623_pwm_apply_brightness(pdev, tune_level);
 }
