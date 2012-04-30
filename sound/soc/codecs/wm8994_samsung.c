@@ -39,6 +39,14 @@
 #include "wm8994_samsung.h"
 #include <mach/pinmux.h>
 #include <linux/timer.h>
+#if defined(CONFIG_MACH_N1_CHN)
+#include <mach/gpio-n1.h>
+extern int g_headset_status;
+#endif
+
+#ifdef CONFIG_SND_VOODOO
+#include "wm8994_voodoo.h"
+#endif
 
 #define WM8994_VERSION "0.1"
 #define SUBJECT "wm8994_samsung.c"
@@ -196,6 +204,10 @@ int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 	 * D8...D0 register data
 	 */
 
+#ifdef CONFIG_SND_VOODOO
+	value = voodoo_hook_wm8994_write(codec, reg, value);
+#endif
+
 	data[0] = (reg & 0xff00) >> 8;
 	data[1] = reg & 0x00ff;
 	data[2] = value >> 8;
@@ -322,6 +334,7 @@ static const char *analog_vol_control[] = {"0", "1", "2", "3", "4", "5",
 static const char *tty_control[]     = { "OFF", "ON" };
 static const char *hac_control[]     = { "OFF", "ON" };
 static const char *two_mic_control[] = { "OFF", "ON" };
+static const char *music_mode[] = { "OFF", "ON" };
 #endif
 
 #ifdef WM8994_FACTORY_LOOPBACK
@@ -544,6 +557,42 @@ static int wm8994_set_hac_status(struct snd_kcontrol *kcontrol, struct snd_ctl_e
 	}
 	return 0;
 }
+
+static int wm8994_get_music_mode(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct wm8994_priv *wm8994 = codec->drvdata;
+
+	int status = ucontrol->value.integer.value[0];
+
+	DEBUG_LOG("status : (%d)", status);
+
+	return 0;
+}
+
+static int wm8994_set_music_mode(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct wm8994_priv *wm8994 = codec->drvdata;
+
+	int status = ucontrol->value.integer.value[0];
+
+	DEBUG_LOG("status : (%d)", status);
+
+	switch (status) {
+	case 0:
+		wm8994->music_mode = 0;
+		DEBUG_LOG("music_mode Off");
+		break;
+	case 1:	 wm8994->music_mode = 1;
+		DEBUG_LOG("music_mode ON");
+		break;
+	default:
+		DEBUG_LOG("Unknown music_mode status!!!");
+		break;
+	}
+	return 0;
+}
 #endif
 
 static int wm8994_get_mic_path(struct snd_kcontrol *kcontrol,
@@ -651,7 +700,9 @@ static int wm8994_set_path(struct snd_kcontrol *kcontrol,
 		DEBUG_LOG_ERR("Unknown Path");
 		return -ENODEV;
 	}
-
+#if defined(CONFIG_MACH_N1_CHN)
+	DEBUG_LOG("get state[GPIO_DET_3_5]= %d, g_headset_status=%d",gpio_get_value(GPIO_DET_3_5),g_headset_status);
+#endif 	
 	wm8994->dap_state = dap_connection_codec_slave;
 	switch (path_num) {
 	case OFF:
@@ -1322,6 +1373,7 @@ static const struct soc_enum path_control_enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(two_mic_control), two_mic_control),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(tty_control), tty_control),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(hac_control), hac_control),
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(music_mode), music_mode),
 #endif
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(wb_voice_mode_control), wb_voice_mode_control),
 #ifdef WM8994_FACTORY_LOOPBACK
@@ -1373,25 +1425,28 @@ static const struct snd_kcontrol_new wm8994_snd_controls[] = {
 
 	SOC_ENUM_EXT("Headset Volume Control", path_control_enum[7],
 		wm8994_get_headset_analog_vol, wm8994_set_headset_analog_vol),
-#if defined (CONFIG_MACH_BOSE_ATT)
-	SOC_ENUM_EXT("2Mic Enable", path_control_enum[8],
-	    	wm8994_get_2mic_status, wm8994_set_2mic_status),
-	SOC_ENUM_EXT("TTY Enable", path_control_enum[9],
-	    	wm8994_get_tty_status, wm8994_set_tty_status),
-	SOC_ENUM_EXT("HAC Enable", path_control_enum[10],
-	    	wm8994_get_hac_status, wm8994_set_hac_status),
-	SOC_ENUM_EXT("FM Volume Control", path_control_enum[11],
-	    	wm8994_get_fm_analog_vol, wm8994_set_fm_analog_vol),
-	SOC_ENUM_EXT("WB Voice Mode", path_control_enum[12],
-		     wm8994_get_wb_voice_mode, wm8994_set_wb_voice_mode),			
-#ifdef WM8994_FACTORY_LOOPBACK
-	SOC_ENUM_EXT("factory_test_loopback", path_control_enum[13],
-		wm8994_get_loopback_path, wm8994_set_loopback_path),
-#endif
-#else
+
 	SOC_ENUM_EXT("FM Volume Control", path_control_enum[8],
 		wm8994_get_fm_analog_vol, wm8994_set_fm_analog_vol),
 
+#if defined (CONFIG_MACH_BOSE_ATT)
+	SOC_ENUM_EXT("2Mic Enable", path_control_enum[9],
+	    	wm8994_get_2mic_status, wm8994_set_2mic_status),
+	SOC_ENUM_EXT("TTY Enable", path_control_enum[10],
+	    	wm8994_get_tty_status, wm8994_set_tty_status),
+	SOC_ENUM_EXT("HAC Enable", path_control_enum[11],
+	    	wm8994_get_hac_status, wm8994_set_hac_status),
+
+	SOC_ENUM_EXT("Music Mode", path_control_enum[12],
+	    	wm8994_get_music_mode, wm8994_set_music_mode),
+
+	SOC_ENUM_EXT("WB Voice Mode", path_control_enum[13],
+		     wm8994_get_wb_voice_mode, wm8994_set_wb_voice_mode),			
+#ifdef WM8994_FACTORY_LOOPBACK
+	SOC_ENUM_EXT("factory_test_loopback", path_control_enum[14],
+		wm8994_get_loopback_path, wm8994_set_loopback_path),
+#endif
+#else
 	SOC_ENUM_EXT("WB Voice Mode", path_control_enum[9],
 		     wm8994_get_wb_voice_mode, wm8994_set_wb_voice_mode),
 #ifdef WM8994_FACTORY_LOOPBACK
@@ -3786,6 +3841,7 @@ static int wm8994_init(struct wm8994_priv *wm8994,
 	wm8994->Fac_SUB_MIC_state = 0;
 	wm8994->TTY_state = 0;
 	wm8994->HAC_state = 0;
+	wm8994->music_mode = 0;
 	wm8994->clock_state = dap_connection_codec_slave;
 #endif
 #ifdef WM8994_FACTORY_LOOPBACK
@@ -3906,6 +3962,10 @@ static int wm8994_i2c_probe(struct i2c_client *i2c,
 		dev_err(&i2c->dev, "failed to initialize WM8994\n");
 		goto err_init;
 	}
+
+#ifdef CONFIG_SND_VOODOO
+	voodoo_hook_wm8994_pcm_probe(codec);
+#endif
 
 	return ret;
 
