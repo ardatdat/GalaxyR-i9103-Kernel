@@ -1216,9 +1216,15 @@ SND_SOC_DAPM_SUPPLY("DSP1CLK", WM8994_CLOCKING_1, 3, 0, NULL, 0),
 SND_SOC_DAPM_SUPPLY("DSP2CLK", WM8994_CLOCKING_1, 2, 0, NULL, 0),
 SND_SOC_DAPM_SUPPLY("DSPINTCLK", WM8994_CLOCKING_1, 1, 0, NULL, 0),
 
-SND_SOC_DAPM_AIF_OUT("AIF1ADC1L", NULL,
+
+///SND_SOC_DAPM_AIF_OUT("AIF1ADC1L", NULL,
+
+SND_SOC_DAPM_SUPPLY("AIF1CLK", WM8994_AIF1_CLOCKING_1, 0, 0, NULL, 0),
+SND_SOC_DAPM_SUPPLY("AIF2CLK", WM8994_AIF2_CLOCKING_1, 0, 0, NULL, 0),
+
+SND_SOC_DAPM_AIF_OUT("AIF1ADC1L", "AIF1 Capture",
 		     0, WM8994_POWER_MANAGEMENT_4, 9, 0),
-SND_SOC_DAPM_AIF_OUT("AIF1ADC1R", NULL,
+SND_SOC_DAPM_AIF_OUT("AIF1ADC1R", "AIF1 Capture",
 		     0, WM8994_POWER_MANAGEMENT_4, 8, 0),
 SND_SOC_DAPM_AIF_IN_E("AIF1DAC1L", NULL, 0,
 		      WM8994_POWER_MANAGEMENT_5, 9, 0, wm8958_aif_ev,
@@ -1227,9 +1233,9 @@ SND_SOC_DAPM_AIF_IN_E("AIF1DAC1R", NULL, 0,
 		      WM8994_POWER_MANAGEMENT_5, 8, 0, wm8958_aif_ev,
 		      SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
 
-SND_SOC_DAPM_AIF_OUT("AIF1ADC2L", NULL,
+SND_SOC_DAPM_AIF_OUT("AIF1ADC2L", "AIF1 Capture",
 		     0, WM8994_POWER_MANAGEMENT_4, 11, 0),
-SND_SOC_DAPM_AIF_OUT("AIF1ADC2R", NULL,
+SND_SOC_DAPM_AIF_OUT("AIF1ADC2R", "AIF1 Capture",
 		     0, WM8994_POWER_MANAGEMENT_4, 10, 0),
 SND_SOC_DAPM_AIF_IN_E("AIF1DAC2L", NULL, 0,
 		      WM8994_POWER_MANAGEMENT_5, 11, 0, wm8958_aif_ev,
@@ -1274,7 +1280,6 @@ SND_SOC_DAPM_AIF_IN_E("AIF2DACR", NULL, 0,
 
 SND_SOC_DAPM_AIF_IN("AIF1DACDAT", "AIF1 Playback", 0, SND_SOC_NOPM, 0, 0),
 SND_SOC_DAPM_AIF_IN("AIF2DACDAT", "AIF2 Playback", 0, SND_SOC_NOPM, 0, 0),
-SND_SOC_DAPM_AIF_OUT("AIF1ADCDAT", "AIF1 Capture", 0, SND_SOC_NOPM, 0, 0),
 SND_SOC_DAPM_AIF_OUT("AIF2ADCDAT", "AIF2 Capture", 0, SND_SOC_NOPM, 0, 0),
 
 SND_SOC_DAPM_MUX("AIF1DAC Mux", SND_SOC_NOPM, 0, 0, &aif1dac_mux),
@@ -1455,11 +1460,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{ "AIF2DAC2R Mixer", "AIF1.1 Switch", "AIF1DAC1R" },
 	{ "AIF2DAC2R Mixer", "Left Sidetone Switch", "Left Sidetone" },
 	{ "AIF2DAC2R Mixer", "Right Sidetone Switch", "Right Sidetone" },
-
-	{ "AIF1ADCDAT", NULL, "AIF1ADC1L" },
-	{ "AIF1ADCDAT", NULL, "AIF1ADC1R" },
-	{ "AIF1ADCDAT", NULL, "AIF1ADC2L" },
-	{ "AIF1ADCDAT", NULL, "AIF1ADC2R" },
 
 	{ "AIF2ADCDAT", NULL, "AIF2ADC Mux" },
 
@@ -1658,7 +1658,6 @@ static int _wm8994_set_fll(struct snd_soc_codec *codec, int id, int src,
 		/* Allow no source specification when stopping */
 		if (freq_out)
 			return -EINVAL;
-		src = wm8994->fll[id].src;
 		break;
 	case WM8994_FLL_SRC_MCLK1:
 	case WM8994_FLL_SRC_MCLK2:
@@ -2381,7 +2380,7 @@ static int wm8994_set_tristate(struct snd_soc_dai *codec_dai, int tristate)
 	else
 		val = 0;
 
-	return snd_soc_update_bits(codec, reg, mask, val);
+	return snd_soc_update_bits(codec, reg, mask, reg);
 }
 
 #define WM8994_RATES SNDRV_PCM_RATE_8000_96000

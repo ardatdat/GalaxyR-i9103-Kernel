@@ -218,6 +218,7 @@ struct wm8994_priv {
 	int Fac_SUB_MIC_state;
 	int TTY_state;
 	int HAC_state;
+	int music_mode;
 	int clock_state;
 #endif
 	int music_mode;
