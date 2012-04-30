@@ -133,10 +133,6 @@ Codec Output Path BIT
 #define HAC_ON       5
 #endif
 
-// SYS_AUDIO - csc_tuning : apply tuning values by checking CSC
-#define CMD_CUSTOMER_COMMON   0
-#define CMD_CUSTOMER_SWA   1
-
 /*
  * Definitions of enum type
  */
@@ -170,10 +166,6 @@ enum wb_voice_state	{WB_OFF, WB_ON};
 #ifdef WM8994_FACTORY_LOOPBACK
 enum loopback_state	{LOOPBACK_OFF, LOOPBACK_RCV, LOOPBACK_SPK, LOOPBACK_HP, LOOPBACK_HP_3POLE};
 #endif
-
-// SYS_AUDIO - csc_tuning : apply tuning values by checking CSC
-enum customer_state	{CUSTOMER_COMMON, CUSTOMER_SWA};
-
 
 typedef void (*select_route)(struct snd_soc_codec *);
 typedef void (*select_mic_route)(struct snd_soc_codec *);
@@ -227,6 +219,7 @@ struct wm8994_priv {
 	int Fac_SUB_MIC_state;
 	int TTY_state;
 	int HAC_state;
+	int music_mode;
 	int clock_state;
 #endif
 #ifdef WM8994_FACTORY_LOOPBACK
@@ -235,11 +228,7 @@ struct wm8994_priv {
 	int mute_pop;
 	int boot_state;
 	enum  dap_connection_status dap_state;
-
-// SYS_AUDIO - csc_tuning : apply tuning values by checking CSC
-      enum customer_state customer;
-
-	  };
+};
 
 struct gain_info_t {
 	unsigned int mode;
