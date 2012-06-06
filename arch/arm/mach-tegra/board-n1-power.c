@@ -184,7 +184,7 @@ static struct max8907c_charger_pdata n1_charger_pdata = {
     .vchg_r_f_cb = max8907c_poewer_vchg_r_f_cb, /* FACTORY TEST BINARY */
 	.topoff_threshold	= MAX8907C_TOPOFF_20PERCENT,
 	.restart_hysteresis	= MAX8907C_RESTART_100MV,
-	.fast_charging_current	= MAX8907C_FASTCHARGE_460MA,
+	.fast_charging_current	= MAX8907C_FASTCHARGE_800MA,
 	.fast_charger_time	= MAX8907C_FCHARGE_TM_OFF,
 };
 
