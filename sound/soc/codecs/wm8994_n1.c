@@ -1476,7 +1476,11 @@ void wm8994_filter_playback(struct snd_soc_codec *codec)
 
 	/*AIF1DRC1*/
 	wm8994_write(codec, 0x440, 0xbc);
+#if defined(CONFIG_SND_SOC_N1_AUDIO_CHN)
+	wm8994_write(codec, 0x441, 0x605);
+#else
 	wm8994_write(codec, 0x441, 0x845);
+#endif
 	wm8994_write(codec, 0x442, 0x18);
 	wm8994_write(codec, 0x443, 0x186);
 	wm8994_write(codec, 0x444, 0x0);

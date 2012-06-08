@@ -1307,9 +1307,30 @@ static bool _tegra_dc_controller_enable(struct tegra_dc *dc)
 
 void tegra_dc_data_out(struct tegra_dc *dc)
 {
-    tegra_dc_writel(dc, DISP_CTRL_MODE_C_DISPLAY, DC_CMD_DISPLAY_COMMAND);
-    tegra_dc_writel(dc, GENERAL_ACT_REQ << 8, DC_CMD_STATE_CONTROL);
-    tegra_dc_writel(dc, GENERAL_ACT_REQ, DC_CMD_STATE_CONTROL);
+	unsigned long update_mask = GENERAL_ACT_REQ;
+	unsigned long val;
+
+	mutex_lock(&dc->lock);  
+
+	update_mask |= WIN_A_ACT_REQ;
+
+
+	tegra_dc_writel(dc, update_mask << 8, DC_CMD_STATE_CONTROL);
+
+	if (!no_vsync) {
+		val = tegra_dc_readl(dc, DC_CMD_INT_ENABLE);
+		val |= FRAME_END_INT;
+		tegra_dc_writel(dc, val, DC_CMD_INT_ENABLE);
+
+		val = tegra_dc_readl(dc, DC_CMD_INT_MASK);
+		val |= FRAME_END_INT;
+		tegra_dc_writel(dc, val, DC_CMD_INT_MASK);
+	}
+
+	tegra_dc_writel(dc, update_mask, DC_CMD_STATE_CONTROL);
+
+	mutex_unlock(&dc->lock);  
+
 }
 
 static bool _tegra_dc_enable(struct tegra_dc *dc)

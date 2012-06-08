@@ -26,7 +26,7 @@
 #include <linux/workqueue.h>
 #include <linux/gpio.h>
 
-#define SEC_DEBUG 0
+#define SEC_DEBUG 1
 
 struct gpio_button_data {
 	struct gpio_keys_button *button;

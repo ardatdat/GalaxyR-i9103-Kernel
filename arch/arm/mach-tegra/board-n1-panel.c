@@ -350,9 +350,17 @@ static struct platform_device *n1_gfx_devices[] __initdata = {
  */
 struct early_suspend n1_panel_early_suspender;
 
+extern int n1_panel_disable(void); 
+extern void n1_panel_config_pins(void);
+extern void n1_panel_reconfig_pins(void);
+extern int cmc623_suspend(struct early_suspend *h);
+extern int cmc623_resume(struct early_suspend *h);
+extern int n1_panel_enable(void);
 static void n1_panel_early_suspend(struct early_suspend *h)
 {
 	printk(KERN_INFO "\n ************ %s : %d\n", __func__, __LINE__);
+    n1_panel_disable();
+	n1_panel_config_pins(); //sjlee_0414 (sleep current problem)
 
 	if (num_registered_fb > 0)
 		fb_blank(registered_fb[0], FB_BLANK_POWERDOWN);
@@ -363,6 +371,7 @@ static void n1_panel_early_suspend(struct early_suspend *h)
 		SET_CONSERVATIVE_GOVERNOR_UP_THRESHOLD,
 		SET_CONSERVATIVE_GOVERNOR_DOWN_THRESHOLD);
 #endif
+    cmc623_suspend(NULL);
 }
 
 static void n1_panel_late_resume(struct early_suspend *h)
@@ -375,6 +384,11 @@ static void n1_panel_late_resume(struct early_suspend *h)
 #ifdef CONFIG_CPU_FREQ
 	cpufreq_restore_default_governor(CPUFREQ_DISP_MODE);
 #endif
+
+	cmc623_resume(NULL);
+
+	n1_panel_reconfig_pins(); //sjlee_0414 (sleep current problem)
+  n1_panel_enable();
 }
 #endif
 

@@ -1270,13 +1270,14 @@ static int cmc623_i2c_probe(struct i2c_client *client,
 
 	/*cmc623_i2c_client = c;*/
 #endif
+#if 0 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	cmc623_early_suspend.level =  EARLY_SUSPEND_LEVEL_DISABLE_FB-2;
 	cmc623_early_suspend.suspend = cmc623_suspend;
 	cmc623_early_suspend.resume = cmc623_resume;
 	register_early_suspend(&cmc623_early_suspend);
 #endif	/* CONFIG_HAS_EARLYSUSPEND */
-
+#endif
 	return 0;
 }
 

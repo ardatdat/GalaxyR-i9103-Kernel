@@ -201,6 +201,11 @@
 #define MXT_ADR_T9_XEDGEDIST                            0x1b
 #define MXT_ADR_T9_YEDGECTRL                            0x1c
 #define MXT_ADR_T9_YEDGEDIST                            0x1d
+#define MXT_ADR_T9_JUMPLIMIT                            0x1e
+#define MXT_ADR_T9_TCHHYST                             0x1f
+#define MXT_ADR_T9_XPITCH                            0x20
+#define MXT_ADR_T9_YPITCH                           0x21
+#define MXT_ADR_T9_NEXTTCHDI                           0x22
 
 /* TOUCH_KEYARRAY_T15 Address Definitions               */
 

@@ -2675,7 +2675,7 @@ wl_iw_set_wap(
 
 	/* join  to specific channel , use 0 for all  channels */
 	/* g_wl_iw_params.target_channel = 0; */
-	WL_TRACE(("%s  target_channel=%d\n", __FUNCTION__, g_wl_iw_params.target_channel));
+	//WL_TRACE(("%s  target_channel=%d\n", __FUNCTION__, g_wl_iw_params.target_channel));
 	wl_iw_ch_to_chanspec(g_wl_iw_params.target_channel, &join_params, &join_params_size);
 
 	if ((error = dev_wlc_ioctl(dev, WLC_SET_SSID, &join_params, join_params_size))) {
@@ -2683,11 +2683,11 @@ wl_iw_set_wap(
 		return error;
 	}
 
-	if (g_ssid.SSID_len) {
+	/*if (g_ssid.SSID_len) {
 		WL_TRACE(("%s: join SSID=%s BSSID="MACSTR" ch=%d\n", __FUNCTION__,
 			g_ssid.SSID, MAC2STR((u8 *)awrq->sa_data),
 			g_wl_iw_params.target_channel));
-	}
+	}*/
 #endif
 	/* Clean up cached SSID */
 	memset(&g_ssid, 0, sizeof(g_ssid));
@@ -4613,8 +4613,7 @@ wl_iw_set_essid(
 	}
 	g_call_join_disassoc = G_WLAN_CALL_JOIN_DISASSOC;
 	if (g_ssid.SSID_len) {
-		WL_ERROR(("%s: join SSID=%s ch=%d\n", __FUNCTION__,
-			g_ssid.SSID,  g_wl_iw_params.target_channel));
+		WL_ERROR(("%s: join SSID ch=%d\n", __FUNCTION__, g_wl_iw_params.target_channel));
 	}
 	kfree(join_params);
 	return 0;

@@ -90,7 +90,7 @@ static int n1_spi_write(u8 addr, u8 data)
 }
 
 #if n1_ld9040
-static int n1_panel_enable(void)
+int n1_panel_enable(void)
 {
 	printk(KERN_INFO "%s: start\n", __func__);
 
@@ -213,10 +213,10 @@ static int n1_panel_enable(void)
 	return 0;
 }
 #else
-static int n1_panel_enable(void)
+int n1_panel_enable(void)
 {
-	regulator_enable(reg_lcd_1v8);
 	regulator_enable(reg_lcd_3v0);
+	regulator_enable(reg_lcd_1v8);	
 	mdelay(10);
 	/* take panel out of reset */
 	gpio_set_value(n1_lvds_reset, 1);
@@ -268,8 +268,9 @@ static int n1_panel_enable(void)
 	return 0;
 }
 #endif
+EXPORT_SYMBOL(n1_panel_enable);
 
-static int n1_panel_disable(void)
+int n1_panel_disable(void)
 {
 	//Display off
 	{
@@ -294,8 +295,9 @@ static int n1_panel_disable(void)
 	regulator_disable(reg_lcd_1v8);
 	return 0;
 }
+EXPORT_SYMBOL(n1_panel_disable);
 
-static void n1_panel_config_pins(void)
+void n1_panel_config_pins(void)
 {
     tegra_gpio_enable(TEGRA_GPIO_PN4);
     gpio_request(TEGRA_GPIO_PN4, "SFIO_LCD_NCS");
@@ -304,14 +306,16 @@ static void n1_panel_config_pins(void)
     gpio_request(TEGRA_GPIO_PZ4, "SFIO_LCD_SCLK");
     gpio_direction_output(TEGRA_GPIO_PZ4, 0);
 }
+EXPORT_SYMBOL(n1_panel_config_pins);
 
-static void n1_panel_reconfig_pins(void)
+void n1_panel_reconfig_pins(void)
 {
     /* LCD_nCS */
     tegra_gpio_disable(TEGRA_GPIO_PN4);
     /* LCD_SCLK */
     tegra_gpio_disable(TEGRA_GPIO_PZ4);
 }
+EXPORT_SYMBOL(n1_panel_reconfig_pins);
 
 static int panel_n1_spi_suspend(struct spi_device *spi, pm_message_t message)
 {
@@ -473,12 +477,13 @@ static int panel_n1_spi_probe(struct spi_device *spi)
 
 	n1_disp1_spi = spi;
 
+#if 0 
 	//n1_panel_early_suspend.level =  EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;/* EARLY_SUSPEND_LEVEL_DISABLE_FB; */
 	n1_panel_early_suspend.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
 	n1_panel_early_suspend.suspend = panel_n1_spi_suspend;
 	n1_panel_early_suspend.resume = panel_n1_spi_resume;
 	register_early_suspend(&n1_panel_early_suspend);
-
+#endif
 	n1_panel_enable();
 
 	return 0;

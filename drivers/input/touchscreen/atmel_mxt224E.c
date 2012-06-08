@@ -140,6 +140,7 @@
 *
 */
 
+#define TSP_INFO_LOG
 
 int tsp_keycodes[NUMOFKEYS] = { 
 	KEY_MENU,
@@ -183,6 +184,7 @@ static u32 key_led_status = false;
 #endif
 
 u8 first_palm_chk ;
+u8 median_error_flag;
 
 bool mxt_reconfig_flag;
 EXPORT_SYMBOL(mxt_reconfig_flag);
@@ -614,7 +616,18 @@ static void mxt_ta_worker(struct work_struct *work)
 		mxt_write_byte(mxt->client,
 			MXT_BASE_ADDR(MXT_SPT_CTECONFIG_T46) + MXT_ADR_T46_ACTVSYNCSPERX,
 			T46_ACTVSYNCSPERX);
+#if 1 // by young 20111206		
+		if(median_error_flag == 1){
+			mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_TCHTHR, T9_TCHTHR);
+			mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_MOVFILTER, T9_MOVFILTER);
+			mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_NEXTTCHDI, T9_NEXTTCHDI);
+			median_error_flag= 0;
+		}
 
+#endif		
 		/* CHRGON enable */
 		error = mxt_write_byte(mxt->client,
 			MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_CALCFG,
@@ -1033,6 +1046,7 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 	static int prev_touch_id = -1;
 	int i, error;
 	u16 chkpress = 0;
+	u16 finger_channel_cnt = 0;	
 	u8 touch_message_flag = 0;
 	static int cal_move =0;
 
@@ -1162,7 +1176,22 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 
 		if((tch_vct[new_touch.id].cnt >= 3) && (time_after_autocal_enable == 0)){
 			check_chip_channel(mxt);
-			if (((chk_touch_cnt < 7) || (chk_touch_cnt > 15)) || ((chk_touch_cnt >= 7) && ((chk_antitouch_cnt >= 4) &&(chk_antitouch_cnt < (chk_touch_cnt + 3))))) {
+
+			if (status & MXT_MSGB_T9_DETECT) {   /* case 1: detected */
+				mtouch_info[touch_id].pressure = message[MXT_MSG_T9_TCHAMPLITUDE];  /* touch amplitude */
+			}
+			for (i = 0 ; i < MXT_MAX_NUM_TOUCHES ; ++i) { 
+				if ( mtouch_info[i].pressure == -1 )
+					continue;
+				finger_channel_cnt++;
+			}
+
+
+			 if ( chk_touch_cnt  < ((finger_channel_cnt * 2)+1)) { 
+				klogi_if("[TSP] Floating metal Supressed (finger_channel_cnt : %d, chk_touch_cnt : %d)\n", finger_channel_cnt, chk_touch_cnt);
+				calibrate_chip(mxt);
+			}		
+			else if (((chk_touch_cnt < 7) || (chk_touch_cnt > 19)) || ((chk_touch_cnt >= 7) && ((chk_antitouch_cnt >= 4) &&(chk_antitouch_cnt < (chk_touch_cnt + 3))))) {
 				for(i=0;i < 10; i++) {
 					tch_vct[i].cnt = 0;
 				}
@@ -1717,8 +1746,43 @@ int process_message(u8 *message, u8 object, struct mxt_data *mxt)
 		if (state == 0x05) {	/* error state */
 			if (debug >= DEBUG_MESSAGES) 
 				dev_info(&client->dev, "[TSP] NOISESUPPRESSION_T48 error\n");
+#if 1 // by young 20111206
+			if((!(mxt->set_mode_for_ta))&&(median_error_flag == 0))
+		      {
+			/*//20120412
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_BLEN, 16);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_TCHTHR, 40);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_MOVFILTER, 80);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_BASEFREQ, 29);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_MFFREQ_2, 1);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_MFFREQ_3, 2);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_GCMAXADCSPERX, 100);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_GCLIMITMAX, 64);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_MFINVLDDIFFTHR, 20);
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_PROCG_NOISESUPPRESSION_T48) + MXT_ADR_T48_MFERRORTHR, 38);
+				median_error_flag = 1;
+			*///20120412
+		       }
+		}
+		if ((state == 0x04)&&(!(mxt->set_mode_for_ta))) {	/* error state */
+			/*//20120412
+				mxt_write_byte(mxt->client,
+				MXT_BASE_ADDR(MXT_TOUCH_MULTITOUCHSCREEN_T9) + MXT_ADR_T9_NEXTTCHDI, 0);
+			*///20120412	
 		}
 		break;
+#endif
+
 	case MXT_GEN_COMMANDPROCESSOR_T6:
 		status = message[1];
 		if (status & MXT_MSGB_T6_COMSERR) { 
@@ -4136,12 +4200,13 @@ static void ts_100ms_tmr_work(struct work_struct *work)
 	}
 
 	if ((timer_flag == ENABLE) && (timer_ticks < cal_time)) {
+		klogi_if("[TSP] calibrate_chip_0\n");
 		ts_100ms_timer_start(mxt);
 		palm_check_timer_flag = false;
 	} else {
 		if( facesup_message_flag &&  ((first_palm_chk == true) ||cal_check_flag))
 		{
-			klogi_if("[TSP] calibrate_chip\n");
+			klogi_if("[TSP] calibrate_chip_1\n");
 			calibrate_chip(mxt); 
 			palm_check_timer_flag = false;
     
@@ -4150,7 +4215,7 @@ static void ts_100ms_tmr_work(struct work_struct *work)
 		else if (palm_check_timer_flag 
 			&& ((facesup_message_flag == 1) || (facesup_message_flag == 2)|| (facesup_message_flag == 5)) 
 			&& (palm_release_flag == false)) {
-			klogi_if("[TSP] calibrate_chip\n");
+			klogi_if("[TSP] calibrate_chip_2\n");
 			calibrate_chip(mxt);	
 			palm_check_timer_flag = false;
 

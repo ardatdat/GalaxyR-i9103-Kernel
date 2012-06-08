@@ -143,13 +143,15 @@ int max8907c_adc_read_aux2(int *mili_volt)
 	*mili_volt = 0;
 
 	mutex_lock(&adc_en_lock);
-	
+
+#ifndef CONFIG_MACH_N1_CHN
 	/* Enable ADCREF by setting the INT_REF_EN bit in the RESET_CNFG register */
 	ret = max8907c_set_bits(max8907c_i2c_power_client, MAX8907C_REG_RESET_CNFG, 0x01, 0x01);
 	if (ret < 0) {
 		pr_err("%s() failed writing on register %x returned %d\n", __func__, MAX8907C_REG_RESET_CNFG, ret);
 		goto error;
 	}
+#endif
 	
 	/* Enable internal voltage reference. 
 	 * Write 0x12 to MAX8907_TSC_CNFG1 to turn on internal reference. */
@@ -178,12 +180,14 @@ int max8907c_adc_read_aux2(int *mili_volt)
 	msb = max8907c_reg_read(max8907c_i2c_adc_client, MAX8907_ADC_RES_AUX2_MSB);
 	lsb = max8907c_reg_read(max8907c_i2c_adc_client, MAX8907_ADC_RES_AUX2_LSB);
 
+#ifndef CONFIG_MACH_N1_CHN
 	/* Disable ADCREF by setting the INT_REF_EN bit 0. in the RESET_CNFG register */
 	ret =max8907c_set_bits(max8907c_i2c_power_client, MAX8907C_REG_RESET_CNFG, 0x01, 0x00);
 	if (ret < 0) {
 		pr_err("%s() failed writing on register %x returned %d\n", __func__, MAX8907C_REG_RESET_CNFG, ret);
 		goto error;
 	}
+#endif
 
 	mutex_unlock(&adc_en_lock);
 	

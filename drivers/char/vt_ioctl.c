@@ -44,6 +44,10 @@ extern struct tty_driver *console_driver;
 #define VT_IS_IN_USE(i)	(console_driver->ttys[i] && console_driver->ttys[i]->count)
 #define VT_BUSY(i)	(VT_IS_IN_USE(i) || i == fg_console || vc_cons[i].d == sel_cons)
 
+#define VT_EVENT_WAIT_TIME ( 3* HZ ) // 3 secs
+
+
+
 /*
  * Console (vt and kd) routines, as defined by USL SVR4 manual, and by
  * experimentation and study of X386 SYSV handling.
@@ -133,7 +137,8 @@ static void vt_event_wait(struct vt_event_wait *vw)
 	list_add(&vw->list, &vt_events);
 	spin_unlock_irqrestore(&vt_event_lock, flags);
 	/* Wait for it to pass */
-	wait_event_interruptible_tty(vt_event_waitqueue, vw->done);
+	//wait_event_interruptible_tty(vt_event_waitqueue, vw->done);
+	wait_event_interruptible_timeout(vt_event_waitqueue, vw->done,VT_EVENT_WAIT_TIME);
 	/* Dequeue it */
 	spin_lock_irqsave(&vt_event_lock, flags);
 	list_del(&vw->list);

@@ -31,15 +31,15 @@
 #define T7_ACTV2IDLETO            20
 
 /* _GEN_ACQUISITIONCONFIG_T8 INSTANCE 0 */
-#define T8_CHRGTIME		45	   /* 6 - 60  * 83 ns */
+#define T8_CHRGTIME		31//45	   /* 6 - 60  * 83 ns */
 #define T8_CHRGTIME_TA	31	   /* 6 - 60  * 83 ns */
 #define T8_ATCHDRIFT              0
 #define T8_TCHDRIFT               5
 #define T8_DRIFTST                1 
 #define T8_TCHAUTOCAL             0
 #define T8_SYNC                   0
-#define T8_ATCHCALST			3
-#define T8_ATCHCALSTHR			20
+#define T8_ATCHCALST			3//50 //255 // 20120405 modified 3
+#define T8_ATCHCALSTHR			15 // 1 //  20120405 modified 20
 #define T8_ATCHFRCCALTHR		127		/* V2.0 added */
 #define T8_ATCHFRCCALRATIO		127		/* V2.0 added */
 
@@ -53,7 +53,7 @@
 #define T9_YSIZE                  11
 #define T9_AKSCFG                 1
 #define T9_BLEN                   0x10
-#define T9_TCHTHR		  32
+#define T9_TCHTHR		  35// 20120405 32
 #define T9_TCHDI                  2
 #define T9_ORIENT                 1
 #define T9_MRGTIMEOUT             10
@@ -184,9 +184,9 @@
 #define T42_SHAPESTRENGTH         0   /* 0 (10), 1 to 31 */
 #else
 #define T42_CTRL                  0x03
-#define T42_APPRTHR               60   /* 0 (TCHTHR/4), 1 to 255 */
-#define T42_MAXAPPRAREA           50	// 33   /* 0 (40ch), 1 to 255 */
-#define T42_MAXTCHAREA            50	// 33   /* 0 (35ch), 1 to 255 */
+#define T42_APPRTHR               18//60   /* 0 (TCHTHR/4), 1 to 255 */
+#define T42_MAXAPPRAREA           32//50	// 33   /* 0 (40ch), 1 to 255 */
+#define T42_MAXTCHAREA            60//50	// 33   /* 0 (35ch), 1 to 255 */
 #define T42_SUPSTRENGTH           128   /* 0 (128), 1 to 255 */
 #define T42_SUPEXTTO              0   /* 0 (never expires), 1 to 255 (timeout in cycles) */
 #define T42_MAXNUMTCHS            0   /* 0 to 9 (maximum number of touches minus 1) */
@@ -223,7 +223,7 @@
 /* PROCG_NOISESUPPRESSION_T48  */
 /* for TA */
 #define T48_CTRL_TA                  1
-#define T48_CFG_TA                   0x84  
+#define T48_CFG_TA                   4 // // 20120404 modified  0x84  
 #define T48_CALCFG_TA                0x50  
 #define T48_BASEFREQ_TA              0 
 #define	T48_RESERVED0_TA             0  
@@ -276,15 +276,15 @@
 
 /* for BATTERY */
 #define	T48_CTRL			3
-#define	T48_CFG				0x84
-#define	T48_CALCFG                0x40
-#define	T48_BASEFREQ              0 
+#define	T48_CFG				4//20120405 0x84
+#define	T48_CALCFG                0x70
+#define	T48_BASEFREQ              22//0 
 #define	T48_RESERVED0             0  
 #define	T48_RESERVED1             0  
 #define	T48_RESERVED2             0  
 #define	T48_RESERVED3             0  
-#define	T48_MFFREQ_2              0
-#define	T48_MFFREQ_3              0
+#define	T48_MFFREQ_2              1//0
+#define	T48_MFFREQ_3              2//0
 #define	T48_RESERVED4             0  
 #define	T48_RESERVED5             0  
 #define	T48_RESERVED6             0  
@@ -292,13 +292,13 @@
 #define	T48_GCIDLEINVLDADCS         6   
 #define	T48_RESERVED7             0  
 #define	T48_RESERVED8             0  
-#define	T48_GCMAXADCSPERX         100
+#define	T48_GCMAXADCSPERX         48 //by young100
 #define	T48_GCLIMITMIN			6
-#define	T48_GCLIMITMAX			64
+#define	T48_GCLIMITMAX			48 //by young 64
 #define	T48_GCCOUNTMINTGT		10
-#define	T48_MFINVLDDIFFTHR		32
+#define	T48_MFINVLDDIFFTHR		10 //by young 32
 #define	T48_MFINCADCSPXTHR		5
-#define	T48_MFERRORTHR			38
+#define	T48_MFERRORTHR			20 //by young38
 #define	T48_SELFREQMAX			5 
 #define	T48_RESERVED9             0  
 #define	T48_RESERVED10            0  
@@ -306,8 +306,8 @@
 #define	T48_RESERVED12            0  
 #define	T48_RESERVED13            0  
 #define	T48_RESERVED14            0  
-#define	T48_BLEN                    0x10
-#define	T48_TCHTHR                  70
+#define	T48_BLEN                    0
+#define	T48_TCHTHR                  45
 #define	T48_TCHDI                   2
 #define	T48_MOVHYSTI                10
 #define	T48_MOVHYSTN                3
@@ -326,8 +326,7 @@
 
 #define	T48_JUMPLIMIT               9
 #define	T48_TCHHYST                 5
-#define	T48_NEXTTCHDI               2
-
+#define	T48_NEXTTCHDI               0 // 2
 #define	T48_CHGON_BIT		0x20
 /********************* END  *********************/
 
