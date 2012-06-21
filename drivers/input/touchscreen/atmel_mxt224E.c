@@ -256,11 +256,8 @@ static int calibrate_chip(struct mxt_data *mxt);
 static void mxt_palm_recovery(struct work_struct *work);
 static void check_chip_palm(struct mxt_data *mxt);
 
-#if 1/*for debugging, enable DEBUG_INFO */
-static int debug = DEBUG_MESSAGES;
-#else
-static int debug = DEBUG_TRACE;  /* for debugging,  enable DEBUG_TRACE */
-#endif
+////static int debug = DEBUG_INFO;
+static int debug = 0;
 
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "Activate debugging output");
@@ -1335,10 +1332,10 @@ void process_T9_message(u8 *message, struct mxt_data *mxt)
 #if defined(TSP_BOOST)
 	if ((status & MXT_MSGB_T9_PRESS) && (!clk_lock_state)) {
 		tegra_cpu_unlock_speed();
-		tegra_cpu_lock_speed(608000, 0);
+		tegra_cpu_lock_speed(912000, 0);
 		clk_lock_state = true;
 	} else if (clk_lock_state && (chkpress == 0) && pressed_or_released) {
-		tegra_cpu_lock_speed(608000, 50);
+		tegra_cpu_lock_speed(912000, 55);
 		clk_lock_state = false;
 	}
 #endif
