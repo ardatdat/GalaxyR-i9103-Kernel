@@ -36,12 +36,13 @@
 
 /* Initial implementation of userspace voltage control */
 #define FREQCOUNT 8
-#define CPUMVMAX 1150
-#define CPUMVMIN 750
+#define CPUMVMAX 1125
+#define CPUMVMIN 770
 int cpufrequency[FREQCOUNT] = { 1000000, 912000, 816000, 760000, 608000, 456000, 312000, 216000 };
-int cpuvoltage[FREQCOUNT] = { 1100, 1050, 1000, 975, 925, 825, 770, 750 };
-			    //1100, 1050, 1000, 975, 900, 825, 775, 750 };
-int cpuuvoffset[FREQCOUNT] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  int cpuvoltage[FREQCOUNT] = { 1125, 1050, 1000, 975, 925, 825, 770, 770 };  //UV, but 4th increased by 25mV 
+//int cpuvoltage[FREQCOUNT] = { 1100, 1050, 1000, 975, 925, 825, 770, 770 };
+//			        1100, 1050, 1000, 975, 900, 825, 775, 750 };
+int cpuuvoffset[FREQCOUNT] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
