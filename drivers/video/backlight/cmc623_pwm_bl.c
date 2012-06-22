@@ -87,6 +87,33 @@ static void cmc623_pwm_backlight_ctl(struct platform_device *pdev, int intensity
 {
 	int tune_level;
 
+	int in_one = 2;
+	int in_two = 200;
+	int in_three = 250;
+
+	int out_one = 16;
+	int out_two = 70;
+	int out_three = 250;
+
+	if (intensity >= 0 && intensity <= in_one)
+	{
+		//e.g input 25, should output (25 * 80) / 50 = 40
+		intensity = (intensity * out_one) / in_one;
+	}
+	else if (intensity > in_one && intensity <= in_two)
+	{
+		//e.g. input 100, should output 80 + ((100-50) / (220-50) * (100-80)) = 85
+		intensity = out_one + ( ((intensity - in_one) * (out_two - out_one)) / (in_two - in_one) );
+	}
+	else if (intensity > in_two)
+	{
+		//e.g. input 240, should output 100 + ((240-220) * (250-100) / (250-220)) = 200
+		//e.g. input 250, should output 100 + ((250-220) * (250-100) / (250-220)) = 250
+		intensity = out_two + ( ((intensity - in_two) * (out_three - out_two)) / (in_three - in_two) );
+	}
+
+	//**************************************************************
+	/**
 	if (intensity <= 220)
 	{
 		//When below 220, the max intensity = 99
@@ -97,6 +124,8 @@ static void cmc623_pwm_backlight_ctl(struct platform_device *pdev, int intensity
 		//When above 220, the intensity will step up by 4
 		intensity = 99 + ((intensity - 220) * 5);
 	}
+	**/
+	//**************************************************************
 	if (intensity > 250)
 	{
 		intensity = 250;
