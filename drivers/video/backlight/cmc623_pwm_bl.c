@@ -87,36 +87,40 @@ static void cmc623_pwm_backlight_ctl(struct platform_device *pdev, int intensity
 {
 	int tune_level;
 
-	if (system_rev >= 12)
+	int in_one = 2;
+	int in_two = 200;
+	int in_three = 255;
+
+	int out_one = 17;
+	int out_two = 70;
+	int out_three = 255;
+
+	if (intensity >= 0 && intensity <= in_one)
 	{
-		if (intensity >= MID_BRIGHTNESS_LEVEL_AFTER_HW12)
-			tune_level = (intensity - MID_BRIGHTNESS_LEVEL_AFTER_HW12) * (MAX_BACKLIGHT_VALUE_AFTER_HW12-MID_BACKLIGHT_VALUE_AFTER_HW12) / (MAX_BRIGHTNESS_LEVEL_AFTER_HW12-MID_BRIGHTNESS_LEVEL_AFTER_HW12) + MID_BACKLIGHT_VALUE_AFTER_HW12;
-		else if (intensity >= LOW_BRIGHTNESS_LEVEL_AFTER_HW12)
-			tune_level = (intensity - LOW_BRIGHTNESS_LEVEL_AFTER_HW12) * (MID_BACKLIGHT_VALUE_AFTER_HW12-LOW_BACKLIGHT_VALUE_AFTER_HW12) / (MID_BRIGHTNESS_LEVEL_AFTER_HW12-LOW_BRIGHTNESS_LEVEL_AFTER_HW12) + LOW_BACKLIGHT_VALUE_AFTER_HW12;
-		else if (intensity >= DIM_BRIGHTNESS_LEVEL_AFTER_HW12)
-			tune_level = (intensity - DIM_BRIGHTNESS_LEVEL_AFTER_HW12) * (LOW_BACKLIGHT_VALUE_AFTER_HW12-DIM_BACKLIGHT_VALUE_AFTER_HW12) / (LOW_BRIGHTNESS_LEVEL_AFTER_HW12-DIM_BRIGHTNESS_LEVEL_AFTER_HW12) + DIM_BACKLIGHT_VALUE_AFTER_HW12;
-		else if (intensity > 0)
-			tune_level = DIM_BACKLIGHT_VALUE_AFTER_HW12;
-		else
-			tune_level = intensity;
+		//e.g input 25, should output (25 * 80) / 50 = 40
+		intensity = (intensity * out_one) / in_one;
 	}
-	else
+	else if (intensity > in_one && intensity <= in_two)
 	{
-		if (intensity >= MID_BRIGHTNESS_LEVEL)
-			tune_level = (intensity - MID_BRIGHTNESS_LEVEL) * (MAX_BACKLIGHT_VALUE-MID_BACKLIGHT_VALUE) / (MAX_BRIGHTNESS_LEVEL-MID_BRIGHTNESS_LEVEL) + MID_BACKLIGHT_VALUE;
-		else if (intensity >= LOW_BRIGHTNESS_LEVEL)
-			tune_level = (intensity - LOW_BRIGHTNESS_LEVEL) * (MID_BACKLIGHT_VALUE-LOW_BACKLIGHT_VALUE) / (MID_BRIGHTNESS_LEVEL-LOW_BRIGHTNESS_LEVEL) + LOW_BACKLIGHT_VALUE;
-		else if (intensity >= DIM_BRIGHTNESS_LEVEL)
-			tune_level = (intensity - DIM_BRIGHTNESS_LEVEL) * (LOW_BACKLIGHT_VALUE-DIM_BACKLIGHT_VALUE) / (LOW_BRIGHTNESS_LEVEL-DIM_BRIGHTNESS_LEVEL) + DIM_BACKLIGHT_VALUE;
-		else if (intensity > 0)
-			tune_level = DIM_BACKLIGHT_VALUE;
-		else
-			tune_level = intensity;
+		//e.g. input 100, should output 80 + ((100-50) / (220-50) * (100-80)) = 85
+		intensity = out_one + ( ((intensity - in_one) * (out_two - out_one)) / (in_two - in_one) );
+	}
+	else if (intensity > in_two)
+	{
+		//e.g. input 240, should output 100 + ((240-220) * (250-100) / (250-220)) = 200
+		//e.g. input 250, should output 100 + ((250-220) * (250-100) / (250-220)) = 250
+		intensity = out_two + ( ((intensity - in_two) * (out_three - out_two)) / (in_three - in_two) );
 	}
 
-	/*
-	pr_info("--- [cmc backlight control HW rev %d]%d(%d)---\n",system_rev,intensity, tune_level);
-	*/
+	if (intensity > 255)
+	{
+		intensity = 255;
+	}
+	intensity = (intensity * 1550) / 255;
+	if (intensity > 1550) intensity = 1550;
+	if (intensity < 0) intensity = 0;
+	tune_level = intensity;
+
 	cmc623_pwm_apply_brightness(pdev, tune_level);
 }
 
