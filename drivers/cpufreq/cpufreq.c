@@ -49,6 +49,14 @@
  */
 #define __CPUFREQ_KOBJ_DEL_DEADLOCK_FIX
 
+/* Initial implementation of userspace voltage control */
+#define FREQCOUNT 9
+#define CPUMVMAX 1150
+#define CPUMVMIN 770
+int cpufrequency[FREQCOUNT] = { 1200000, 1000000, 912000, 816000, 760000, 608000, 456000, 312000, 216000 };
+  int cpuvoltage[FREQCOUNT] = { 1150, 1125, 1050, 1000, 975, 900, 825, 775, 770 };  //UV, but 4th increased by 25mV 
+
+int cpuuvoffset[FREQCOUNT] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 #ifdef __CPUFREQ_KOBJ_DEL_DEADLOCK_FIX
 static DEFINE_PER_CPU(struct mutex, cpufreq_remove_mutex);
@@ -610,6 +618,57 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 			return sprintf(buf, "%u\n", limit);
 	}
 	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
+}
+
+static ssize_t show_frequency_voltage_table(struct cpufreq_policy *policy, char *buf)
+{
+	char *table = buf;
+	int i;
+	for (i = 0; i < FREQCOUNT; i++)
+		table += sprintf(table, "%d %d %d\n", cpufrequency[i], cpuvoltage[i], (cpuvoltage[i]-cpuuvoffset[i])); // TODO: Should be frequency, default voltage, current voltage 
+	return table - buf;
+}
+
+static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
+{
+	char *table = buf;
+	int i;
+
+	table += sprintf(table, "%d", cpuuvoffset[0]);
+	for (i = 1; i < FREQCOUNT - 1; i++)
+	{
+		table += sprintf(table, " %d", cpuuvoffset[i]);
+	}
+	table += sprintf(table, " %d\n", cpuuvoffset[FREQCOUNT - 1]);
+
+	return table - buf;
+}
+
+static ssize_t show_cpuinfo_max_mV(struct cpufreq_policy *policy, char *buf)
+{
+	sprintf(buf, "%u\n", CPUMVMAX);
+}
+
+static ssize_t show_cpuinfo_min_mV(struct cpufreq_policy *policy, char *buf)
+{
+	sprintf(buf, "%u\n", CPUMVMIN);
+}
+
+static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, char *buf, size_t count)
+{
+	int tmptable[FREQCOUNT];
+	int i;
+	unsigned int ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d", &tmptable[0], &tmptable[1], &tmptable[2], &tmptable[3], &tmptable[4], &tmptable[5], &tmptable[6], &tmptable[7], &tmptable[8] );
+	if (ret != FREQCOUNT)
+		return -EINVAL;
+	for (i = 0; i < FREQCOUNT; i++)
+	{
+		if ((cpuvoltage[i]-tmptable[i]) > CPUMVMAX || (cpuvoltage[i]-tmptable[i]) < CPUMVMIN) // Keep within constraints
+			return -EINVAL;
+		else
+			cpuuvoffset[i] = tmptable[i];
+	}
+	return count;
 }
 
 cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
