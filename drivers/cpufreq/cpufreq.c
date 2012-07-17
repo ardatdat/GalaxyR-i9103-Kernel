@@ -53,7 +53,7 @@
 #define FREQCOUNT 9
 #define CPUMVMAX 1250
 #define CPUMVMIN 770
-int cpufrequency[FREQCOUNT] = { 1300000, 1000000, 912000, 816000, 760000, 608000, 456000, 312000, 216000 };
+int cpufrequency[FREQCOUNT] = { 1320000, 1000000, 912000, 816000, 760000, 608000, 456000, 312000, 216000 };
   int cpuvoltage[FREQCOUNT] = { 1250, 1125, 1050, 1000, 975, 900, 825, 775, 770 };  //UV, but 4th increased by 25mV 
 
 int cpuuvoffset[FREQCOUNT] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
