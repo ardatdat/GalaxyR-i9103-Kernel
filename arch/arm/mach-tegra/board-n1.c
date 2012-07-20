@@ -128,7 +128,9 @@ MODULE_PARM_DESC(charging_mode_from_boot, "Charging mode parameter value.");
 #define SZ_60M                          0x03C00000
 #define SZ_80M                          0x05000000
 #define SZ_100M                         0x06400000
+#define SZ_136M                         0x08800000
 #define SZ_152M                         0x09800000
+#define SZ_300M                         0x12C00000
 
 
 static struct sk_buff *wlan_static_skb[WLAN_SKB_BUF_NUM];
@@ -2925,7 +2927,7 @@ void __init tegra_n1_reserve(void)
 	if (memblock_reserve(0x0, 4096) < 0)
 		pr_warn("Cannot reserve first 4K of memory for safety\n");
 
-	tegra_reserve(SZ_56M, SZ_4M, SZ_4M);
+	tegra_reserve(SZ_136M, SZ_8M, SZ_8M);
 
 	//if (system_rev < 2) /* 512 MB */
 	//	tegra_reserve(SZ_128M, SZ_8M, SZ_16M);
@@ -2934,6 +2936,7 @@ void __init tegra_n1_reserve(void)
 
 	/* Reserve memory for the ram console. */
 	//*******************************************************************
+	/***
 	ram_console_start = memblock_end_of_DRAM() - SZ_1M;
 
 	ret = memblock_remove(ram_console_start, SZ_1M);
@@ -2945,6 +2948,7 @@ void __init tegra_n1_reserve(void)
 		ram_console_resource[0].start = ram_console_start;
 		ram_console_resource[0].end = ram_console_start + SZ_1M - 1;
 	}
+	***/
 	//*******************************************************************
 }
 
