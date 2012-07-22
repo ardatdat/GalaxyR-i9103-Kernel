@@ -351,7 +351,10 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks
+		   -fno-delete-null-pointer-checks \
+		   -marm -march=armv7-a -mtune=cortex-a9 \
+		   -funswitch-loops -fpredictive-commoning \
+		   -fmodulo-sched -fmodulo-sched-allow-regmoves
 #change@wtl.kSingh - enabling FIPS mode - starts
 ifeq ($(USE_SEC_FIPS_MODE),true)
 KBUILD_CFLAGS += -DSEC_FIPS_ENABLED
