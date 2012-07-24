@@ -412,6 +412,7 @@ void ext4_error_inode(struct inode *inode, const char *function,
 	vprintk(fmt, args);
 	printk("\n");
 	va_end(args);
+	save_error_info(inode->i_sb, function, line);
 
 	ext4_handle_error(inode->i_sb);
 }
