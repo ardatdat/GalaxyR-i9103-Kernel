@@ -1443,6 +1443,15 @@ static int cpufreq_suspend(struct sys_device *sysdev, pm_message_t pmsg)
 
 	dprintk("suspending cpu %u\n", cpu);
 
+	printk(KERN_DEBUG "%s: (before) num_online_cpus()=%d \n",
+	       __func__, num_online_cpus());
+
+	if (num_online_cpus() > 1)
+		cpu_down(1);
+
+	printk(KERN_DEBUG "%s: (after) num_online_cpus()=%d \n",
+	       __func__, num_online_cpus());
+
 	if (!cpu_online(cpu))
 		return 0;
 
@@ -1489,6 +1498,12 @@ static int cpufreq_resume(struct sys_device *sysdev)
 	struct cpufreq_policy *cpu_policy;
 
 	dprintk("resuming cpu %u\n", cpu);
+
+	if (num_online_cpus() < 2)
+		cpu_up(1);
+
+	printk(KERN_DEBUG "%s: num_online_cpus()=%d \n",
+	       __func__, num_online_cpus());
 
 	if (!cpu_online(cpu))
 		return 0;
