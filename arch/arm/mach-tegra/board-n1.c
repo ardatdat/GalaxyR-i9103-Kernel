@@ -124,6 +124,7 @@ MODULE_PARM_DESC(charging_mode_from_boot, "Charging mode parameter value.");
 
 #define SZ_5M                           0x00500000
 #define SZ_6M                           0x00600000
+#define SZ_10M                          0x00A00000
 #define SZ_56M                          0x03800000
 #define SZ_60M                          0x03C00000
 #define SZ_80M                          0x05000000
@@ -2927,7 +2928,7 @@ void __init tegra_n1_reserve(void)
 	if (memblock_reserve(0x0, 4096) < 0)
 		pr_warn("Cannot reserve first 4K of memory for safety\n");
 
-	tegra_reserve(SZ_136M, SZ_8M, SZ_8M);
+	tegra_reserve(SZ_152M, SZ_8M, SZ_10M);
 
 	//if (system_rev < 2) /* 512 MB */
 	//	tegra_reserve(SZ_128M, SZ_8M, SZ_16M);
