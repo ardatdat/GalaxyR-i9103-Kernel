@@ -25,11 +25,14 @@
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 #include <linux/kthread.h>
+#include <linux/earlysuspend.h>
 
 #include <asm/cputime.h>
 
 static void (*pm_idle_old)(void);
 static atomic_t active_count = ATOMIC_INIT(0);
+
+static unsigned long stored_timer_rate;
 
 struct cpufreq_interactive_cpuinfo {
 	struct timer_list cpu_timer;
@@ -56,6 +59,13 @@ static cpumask_t up_cpumask;
 static spinlock_t up_cpumask_lock;
 static cpumask_t down_cpumask;
 static spinlock_t down_cpumask_lock;
+static struct mutex set_speed_lock;
+
+// used for suspend code
+//static unsigned int enabled = 0;
+//static unsigned int registration = 0;
+static unsigned int suspendfreq  = 216000;
+static unsigned int hispeedfreq = 608000;
 
 /* Go to max speed when CPU load at or above this value. */
 #define DEFAULT_GO_MAXSPEED_LOAD 85
@@ -66,6 +76,12 @@ static unsigned long go_maxspeed_load;
  */
 #define DEFAULT_MIN_SAMPLE_TIME 80000;
 static unsigned long min_sample_time;
+
+/*
+ * The sample rate of the timer used to increase frequency
+ */
+#define DEFAULT_TIMER_RATE 20 * USEC_PER_MSEC
+static unsigned long timer_rate;
 
 #define DEBUG 0
 #define BUFSZ 128
@@ -568,6 +584,107 @@ static struct attribute_group interactive_attr_group = {
 	.name = "interactive",
 };
 
+static void freq_up(void)
+{
+	unsigned int cpu;
+	cpumask_t tmp_mask;
+	unsigned long flags;
+	struct cpufreq_interactive_cpuinfo *pcpu;
+
+	spin_lock_irqsave(&up_cpumask_lock, flags);
+	tmp_mask = up_cpumask;
+	cpumask_clear(&up_cpumask);
+	spin_unlock_irqrestore(&up_cpumask_lock, flags);
+
+	for_each_possible_cpu(cpu) 
+	{
+		pcpu = &per_cpu(cpuinfo, cpu);
+		smp_rmb();
+
+		if (!pcpu->governor_enabled)
+			continue;
+
+		__cpufreq_driver_target(pcpu->policy,
+					hispeedfreq,
+					CPUFREQ_RELATION_H);
+		pcpu->freq_change_time_in_idle =
+			get_cpu_idle_time_us(cpu,
+					     &pcpu->freq_change_time);
+
+		printk(KERN_DEBUG "%s: [ardatdat]set success, cpu=%d, freq=%d \n",
+			__func__, cpu, hispeedfreq);
+	}
+}
+
+static void freq_down(void)
+{
+	unsigned int cpu;
+	cpumask_t tmp_mask;
+	unsigned long flags;
+	struct cpufreq_interactive_cpuinfo *pcpu;
+
+	spin_lock_irqsave(&down_cpumask_lock, flags);
+	tmp_mask = down_cpumask;
+	cpumask_clear(&down_cpumask);
+	spin_unlock_irqrestore(&down_cpumask_lock, flags);
+
+	for_each_possible_cpu(cpu) 
+	{
+		pcpu = &per_cpu(cpuinfo, cpu);
+		smp_rmb();
+
+		if (!pcpu->governor_enabled)
+			continue;
+
+		__cpufreq_driver_target(pcpu->policy,
+					pcpu->policy->min,
+					CPUFREQ_RELATION_H);
+		pcpu->freq_change_time_in_idle =
+			get_cpu_idle_time_us(cpu,
+					     &pcpu->freq_change_time);
+
+		printk(KERN_DEBUG "%s: [ardatdat]set success, cpu=%d, freq=%d \n",
+			__func__, cpu, pcpu->policy->min);
+	}
+}
+
+
+static void interactivey_suspend(int suspend)
+{
+	if (!suspend) {
+		if (num_online_cpus() < 2) 
+		{ cpu_up(1); }
+		freq_up();
+	} 
+	else 
+	{
+		freq_down();
+		if (num_online_cpus() > 1) 
+		{ cpu_down(1); }
+	}
+
+	printk(KERN_DEBUG "%s: [ardatdat]suspend=%d \n",
+		__func__, suspend);
+	printk(KERN_DEBUG "%s: [ardatdat]num_online_cpus()=%d \n",
+		__func__, num_online_cpus());
+}
+
+static void interactivey_early_suspend(struct early_suspend *handler) {
+	interactivey_suspend(1);
+}
+
+static void interactivey_late_resume(struct early_suspend *handler) {
+	interactivey_suspend(0);
+}
+
+static struct early_suspend interactivey_power_suspend = {
+        .suspend = interactivey_early_suspend,
+        .resume = interactivey_late_resume,
+#ifdef CONFIG_MACH_HERO
+	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1,
+#endif
+};
+
 static int cpufreq_governor_interactive(struct cpufreq_policy *new_policy,
 		unsigned int event)
 {
@@ -681,6 +798,8 @@ static int __init cpufreq_interactive_init(void)
 	dbg_proc = create_proc_entry("igov", S_IWUSR | S_IRUGO, NULL);
 	dbg_proc->read_proc = dbg_proc_read;
 #endif
+
+	register_early_suspend(&interactivey_power_suspend);
 
 	return cpufreq_register_governor(&cpufreq_gov_interactive);
 
