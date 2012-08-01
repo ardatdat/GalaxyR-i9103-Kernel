@@ -39,6 +39,9 @@
 #include "wm8994_samsung.h"
 #include <mach/pinmux.h>
 #include <linux/timer.h>
+
+#define CONFIG_MACH_N1_CHN "Y"
+
 #if defined(CONFIG_MACH_N1_CHN)
 #include <mach/gpio-n1.h>
 extern int g_headset_status;
