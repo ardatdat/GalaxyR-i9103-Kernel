@@ -37,16 +37,10 @@
 #include <mach/suspend.h>
 #endif
 
-#define CONFIG_MACH_N1_CHN "Y"
-
 #define MAX_ZONE_LIMIT		10
 #define SEND_KEY_CHECK_TIME_MS	30		/* 30ms */
 #define DET_CHECK_TIME_MS	200		/* 200ms */
 #define WAKE_LOCK_TIME		(HZ * 5)	/* 5 sec */
-
-#if defined(CONFIG_MACH_N1_CHN)
-int g_headset_status = 0;
-#endif
 
 #ifdef CONFIG_MACH_BOSE_ATT
 extern struct stmpe *g_stmpe;

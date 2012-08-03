@@ -6,8 +6,6 @@
  * published by the Free Software Foundation.
  */
 
-#define CONFIG_MACH_N1_CHN "Y"
-
 #ifndef _WM8994_SAMSUNG_H
 #define _WM8994_SAMSUNG_H
 

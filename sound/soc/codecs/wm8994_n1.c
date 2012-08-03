@@ -19,8 +19,6 @@
 #include "wm8994_samsung.h"
 #include <linux/mfd/max8907c.h>
 
-#define CONFIG_MACH_N1_CHN "Y"
-
 #ifdef CONFIG_SND_VOODOO
 #include "wm8994_voodoo.h"
 #endif
