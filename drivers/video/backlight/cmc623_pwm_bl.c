@@ -89,11 +89,11 @@ static void cmc623_pwm_backlight_ctl(struct platform_device *pdev, int intensity
 
 	int in_one = 2;
 	int in_two = 200;
-	int in_three = 250;
+	int in_three = 255;
 
 	int out_one = 16;
 	int out_two = 75;
-	int out_three = 250;
+	int out_three = 255;
 
 	if (intensity >= 0 && intensity <= in_one)
 	{
