@@ -1,0 +1,20 @@
+#
+# Copyright (c) 2010 Samsung Electronics Co., Ltd.
+# 		http://www.samsung.com/
+# Woojong Yoo
+#	woojong.yoo@samsung.com
+# Licensed under GPLv2
+
+config MHL_SII9234
+	bool "Samsung Mobile HD Link Interface"
+	depends on I2C
+	default n
+	---help---
+	Mobile HD Link Transmitter driver for SiI9234
+
+config MHL_SWITCH
+	bool "Samsung Mobile HD Link Switch Interface"
+	depends on MHL_SII9234
+	default n
+	---help---
+	Mobile HD Link uses switch

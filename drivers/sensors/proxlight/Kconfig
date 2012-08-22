@@ -1,0 +1,17 @@
+#
+# PROXIMITY & LIGHT Sensor Configuration
+#
+config PROXLIGHT
+	bool "PROXIMITY & LIGHT Sensor"
+	default n
+	help
+	  This option enables proximity sensors
+	  Say Y here if you have proximity sensors.
+
+config SENSORS_CM3663
+	tristate "CAPELLA CM3663 ambient light and proximity sensor"
+	depends on PROXLIGHT
+	help
+	  Say Y here if you have CAPELLA CM3663 hooked to an I2C bus.
+	  This option eanbles the light & proximity sensor device driver for
+	  the CAPELLA CM3663 chip.
