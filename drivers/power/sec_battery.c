@@ -519,11 +519,11 @@ static int sec_bat_re_enable_charging_main(struct sec_bat_info *info)
 	case CABLE_TYPE_USB:
 	case CABLE_TYPE_DOCK:
 		val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
-		val_chg_current.intval = 460;	/* mA */
+		val_chg_current.intval = 900;	/* mA */
 		break;
 	case CABLE_TYPE_AC:
 		val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
-		val_chg_current.intval = 600;	/* mA */
+		val_chg_current.intval = 900;	/* mA */
 		break;
 	default:
 		dev_err(info->dev, "%s: Invalid func use\n", __func__);
@@ -566,11 +566,11 @@ static int sec_bat_enable_charging_main(struct sec_bat_info *info, bool enable)
 		case CABLE_TYPE_USB:
 		case CABLE_TYPE_DOCK:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
-			val_chg_current.intval = 460;	/* mA */
+			val_chg_current.intval = 900;	/* mA */
 			break;
 		case CABLE_TYPE_AC:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
-			val_chg_current.intval = 600;	/* mA */
+			val_chg_current.intval = 900;	/* mA */
 			break;
 		default:
 			dev_err(info->dev, "%s: Invalid func use\n", __func__);
@@ -589,12 +589,12 @@ static int sec_bat_enable_charging_main(struct sec_bat_info *info, bool enable)
 		/* Set topoff current */
 		if(info->batt_full_status == BATT_2ND_FULL || info->batt_full_status == BATT_1ST_FULL) {
 			/*set topoff current : 600mA *15%* = 90mA */
-			val_topoff.intval = MAX8907C_TOPOFF_10PERCENT;
+			val_topoff.intval = MAX8907C_TOPOFF_20PERCENT;
 			ret = psy->set_property(psy, POWER_SUPPLY_PROP_CHARGE_FULL,
 					&val_topoff);
 		} else {
 			/*set topoff current : 600mA *20%* = 120mA */
-			val_topoff.intval = MAX8907C_TOPOFF_15PERCENT;
+			val_topoff.intval = MAX8907C_TOPOFF_20PERCENT;
 			ret = psy->set_property(psy, POWER_SUPPLY_PROP_CHARGE_FULL,
 					&val_topoff);
 		}
@@ -654,11 +654,11 @@ static int sec_bat_enable_charging_sub(struct sec_bat_info *info, bool enable)
 		case CABLE_TYPE_USB:
 		case CABLE_TYPE_DOCK:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
-			val_chg_current.intval = 400;	/* mA */
+			val_chg_current.intval = 900;	/* mA */
 			break;
 		case CABLE_TYPE_AC:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
-			val_chg_current.intval = 660;	/* mA */
+			val_chg_current.intval = 900;	/* mA */
 			break;
 		default:
 			dev_err(info->dev, "%s: Invalid func use\n", __func__);
@@ -833,7 +833,7 @@ static int sec_bat_set_property(struct power_supply *ps,
 				info->charging_status = POWER_SUPPLY_STATUS_FULL;
 
 				/*set topoff current : 600mA *15%* = 90mA */
-				value.intval = MAX8907C_TOPOFF_10PERCENT;
+				value.intval = MAX8907C_TOPOFF_20PERCENT;
 				psy->set_property(psy, POWER_SUPPLY_PROP_CHARGE_FULL, &value);
 
 				/* re-enable charging */

@@ -261,12 +261,12 @@ static int max8907c_set_charging_current(struct max8907c_charger *charger,
 {
 	int ret = 0;
 
-	if (chg_current == 600) {
+	if (chg_current >= 600) {
 		/* ac */
 		dev_info(charger->chip->dev, "%s: TA charging\n", __func__);
 		/* set fast charging current : 600mA */
 		ret = max8907c_set_bits(charger->i2c, MAX8907C_REG_CHG_CNTL1,
-			    CHGCNTL1_FCHG_MASK, (3 << CHGCNTL1_FCHG_SHIFT));
+			    CHGCNTL1_FCHG_MASK, (6 << CHGCNTL1_FCHG_SHIFT));
 		if (ret)
 			goto err;
 
@@ -275,7 +275,7 @@ static int max8907c_set_charging_current(struct max8907c_charger *charger,
 		dev_info(charger->chip->dev, "%s: USB charging\n", __func__);
 		/* set fast charging current : 460mA */
 		ret = max8907c_set_bits(charger->i2c, MAX8907C_REG_CHG_CNTL1,
-				CHGCNTL1_FCHG_MASK, (2 << CHGCNTL1_FCHG_SHIFT));
+				CHGCNTL1_FCHG_MASK, (6 << CHGCNTL1_FCHG_SHIFT));
 		if (ret)
 			goto err;
 	} else {

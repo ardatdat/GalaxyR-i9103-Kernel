@@ -459,7 +459,7 @@ static struct max17043_platform_data max17043_pdata = {
 	.charging_rcomp = 0xE7,	/* modified 2011.05.09 by MAXIM */
 	.discharging_rcomp = 0xD7,
 	.standard_temp = 20,
-	.comp_full = 9680,			/* 2011.06.15 modified to 96.8 becase of topoff current changing */
+	.comp_full = 9780,			/* 2011.06.15 modified to 96.8 becase of topoff current changing */
 	.comp_empty = 0,			/* 0 */
 	.low_batt_cb = max17043_low_batt_cb,
 };
