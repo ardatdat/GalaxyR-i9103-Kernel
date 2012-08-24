@@ -30,7 +30,7 @@
 #define	DEBUG_MESSAGES  5
 #define	DEBUG_RAW       8
 #define	DEBUG_TRACE     10
-//#define	TSP_BOOST
+#define	TSP_BOOST	1
 #define	TS_100S_TIMER_INTERVAL 1
 
 #include <linux/kernel.h>
@@ -1550,10 +1550,10 @@ Xtopher
 #if defined(TSP_BOOST)
 	if ((status & MXT_MSGB_T9_PRESS) && (!clk_lock_state)) {
 		tegra_cpu_unlock_speed(false);
-		tegra_cpu_lock_speed(608000, 0, false);
+		tegra_cpu_lock_speed(912000, 0, false);
 		clk_lock_state = true;
 	} else if (clk_lock_state && (chkpress == 0) && pressed_or_released) {
-		tegra_cpu_lock_speed(608000, 50, false);
+		tegra_cpu_lock_speed(912000, 50, false);
 		clk_lock_state = false;
 	}
 #endif
