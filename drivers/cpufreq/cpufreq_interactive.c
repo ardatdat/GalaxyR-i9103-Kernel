@@ -26,6 +26,7 @@
 #include <linux/workqueue.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
+#include <linux/earlysuspend.h>
 
 #include <asm/cputime.h>
 
@@ -671,6 +672,40 @@ static struct attribute_group interactive_attr_group = {
 	.name = "interactive",
 };
 
+static void interactivey_suspend(int suspend)
+{
+	if (!suspend) {
+		if (num_online_cpus() < 2)
+		{ cpu_up(1); }
+	}
+	else
+	{
+		if (num_online_cpus() > 1)
+		{ cpu_down(1); }
+	}
+
+	printk(KERN_DEBUG "%s: [ardatdat]suspend=%d \n",
+		__func__, suspend);
+	printk(KERN_DEBUG "%s: [ardatdat]num_online_cpus()=%d \n",
+		__func__, num_online_cpus());
+}
+
+static void interactivey_early_suspend(struct early_suspend *handler) {
+	interactivey_suspend(1);
+}
+
+static void interactivey_late_resume(struct early_suspend *handler) {
+	interactivey_suspend(0);
+}
+
+static struct early_suspend interactivey_power_suspend = {
+        .suspend = interactivey_early_suspend,
+        .resume = interactivey_late_resume,
+#ifdef CONFIG_MACH_HERO
+	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1,
+#endif
+};
+
 static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		unsigned int event)
 {
@@ -821,6 +856,8 @@ static int __init cpufreq_interactive_init(void)
 	mutex_init(&set_speed_lock);
 
 	idle_notifier_register(&cpufreq_interactive_idle_nb);
+
+	register_early_suspend(&interactivey_power_suspend);
 
 	return cpufreq_register_governor(&cpufreq_gov_interactive);
 
